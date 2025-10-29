@@ -1,0 +1,292 @@
+ion-content {
+  --background: #000;
+  position: relative;
+  overflow: hidden;
+}
+
+// ========== BACKGROUND BLUR VIDEO ==========
+.video-background,
+#videobg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(20px);
+  opacity: 0.3;
+  z-index: 0;
+  pointer-events: none; // Don't block mouse events
+}
+
+// ========== MAIN SCREEN VIDEO (VISIBLE - HOST's screen with audio) ==========
+.main-screen-video,
+#remoteVideo {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  object-fit: contain !important;
+  z-index: 1 !important;
+  background: #000;
+  pointer-events: none; // Don't capture mouse events - let control layer handle it
+}
+
+// ========== CONTROL VIDEO (INVISIBLE - for mouse/keyboard only, NO audio) ==========
+.control-video,
+#video {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  object-fit: contain !important;
+  z-index: 2 !important; // Above main video but below PiPs
+  background: transparent;
+  opacity: 0.01; // Nearly invisible but still receives events
+  pointer-events: auto; // This MUST capture mouse events
+  
+  // Remove audio from this video element
+  &::-webkit-media-controls-panel {
+    display: none !important;
+  }
+  &::-webkit-media-controls {
+    display: none !important;
+  }
+}
+
+// ========== HOST's CAMERA PiP (TOP LEFT - blue border) ==========
+.host-camera-pip,
+#hostCameraVideo {
+  position: fixed !important;
+  top: 20px !important;
+  left: 20px !important;
+  width: 240px !important;
+  height: 180px !important;
+  max-width: 240px !important;
+  max-height: 180px !important;
+  min-width: 240px !important;
+  min-height: 180px !important;
+  border-radius: 12px !important;
+  border: 3px solid #4a90e2 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8) !important;
+  object-fit: cover !important;
+  z-index: 100 !important;
+  background: #1a1a1a;
+  pointer-events: none; // Don't block mouse on screen
+  
+  &.hidden {
+    display: none !important;
+  }
+}
+
+// ========== YOUR CAMERA PiP (BOTTOM LEFT - green border) ==========
+.local-camera-pip,
+#localVideo {
+  position: fixed !important;
+  bottom: 100px !important; // Above controls
+  left: 20px !important;
+  width: 200px !important;
+  height: 150px !important;
+  max-width: 200px !important;
+  max-height: 150px !important;
+  min-width: 200px !important;
+  min-height: 150px !important;
+  border-radius: 12px !important;
+  border: 3px solid #2ecc71 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8) !important;
+  object-fit: cover !important;
+  z-index: 100 !important;
+  background: #1a1a1a;
+  pointer-events: none; // Don't block mouse on screen
+  
+  &.hidden {
+    display: none !important;
+  }
+}
+
+// ========== VIDEO CONTROLS (BOTTOM CENTER) ==========
+app-quick-controls,
+.video-controls {
+  position: fixed !important;
+  bottom: 20px !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 101 !important;
+  pointer-events: auto; // Can be clicked
+}
+
+// ========== UTILITY CLASSES ==========
+.hidden {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+input.hidden {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+// ========== FILE DROP OVERLAY ==========
+.file-drop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(46, 204, 113, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  pointer-events: auto;
+  
+  ion-icon {
+    font-size: 80px;
+    color: white;
+  }
+}
+
+// ========== CONNECTING SPINNER ==========
+.connecting {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 150;
+  pointer-events: none;
+  
+  ion-spinner {
+    width: 60px;
+    height: 60px;
+    --color: #4a90e2;
+  }
+}
+
+// ========== OPTIONS DROPDOWN BUTTON (TOP RIGHT) ==========
+.option-dropdown {
+  position: fixed !important;
+  top: 10px !important;
+  right: 10px !important;
+  z-index: 110 !important;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  
+  &:hover {
+    background: rgba(0, 0, 0, 0.85);
+  }
+}
+
+// ========== HEADER (WHEN OPTIONS SHOWN) ==========
+ion-header {
+  z-index: 105;
+  position: fixed;
+  top: 40px; // Below the dropdown button
+  left: 0;
+  right: 0;
+  pointer-events: auto;
+}
+
+ion-toolbar {
+  --background: rgba(var(--ion-color-primary-rgb), 0.95);
+  backdrop-filter: blur(10px);
+}
+
+// ========== FILE TRANSFER PROGRESS BAR ==========
+.progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  z-index: 150;
+  pointer-events: none;
+  
+  .inner-progress {
+    height: 100%;
+    background: linear-gradient(90deg, #2ecc71, #27ae60);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 10px;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+    transition: width 0.3s ease;
+  }
+}
+
+// ========== FILE LOADING INDICATOR ==========
+.fileLoading {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  padding: 25px 40px;
+  border-radius: 12px;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  color: white;
+  font-size: 16px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+  
+  ion-spinner {
+    --color: #2ecc71;
+  }
+}
+
+// ========== RESPONSIVE ADJUSTMENTS ==========
+@media (max-width: 768px) {
+  // Smaller PiP videos on mobile
+  .host-camera-pip,
+  #hostCameraVideo {
+    width: 160px !important;
+    height: 120px !important;
+    max-width: 160px !important;
+    max-height: 120px !important;
+    min-width: 160px !important;
+    min-height: 120px !important;
+    top: 10px !important;
+    left: 10px !important;
+  }
+  
+  .local-camera-pip,
+  #localVideo {
+    width: 140px !important;
+    height: 105px !important;
+    max-width: 140px !important;
+    max-height: 105px !important;
+    min-width: 140px !important;
+    min-height: 105px !important;
+    bottom: 80px !important;
+    left: 10px !important;
+  }
+  
+  app-quick-controls,
+  .video-controls {
+    bottom: 10px !important;
+  }
+}
+
+// ========== REMOVE DEFAULT VIDEO STYLING ==========
+video {
+  display: block;
+  margin: 0;
+  padding: 0;
+}
+
+// Remove any default containers
+.video-container {
+  display: none !important;
+}
+
