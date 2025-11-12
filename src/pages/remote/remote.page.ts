@@ -111,6 +111,13 @@ export class RemotePage implements OnInit, OnDestroy {
     fileProgress = 0;
     localStream: MediaStream | null = null;
     remoteStream: MediaStream | null = null;
+    hostCameraMinimized = false;
+localCameraMinimized = false;
+hostCameraPosition = { x: 20, y: 20 };
+localCameraPosition = { x: 20, y: 100 };
+isDraggingHost = false;
+isDraggingLocal = false;
+dragOffset = { x: 0, y: 0 };
 
     options: AnimationOptions | any = {
         path: '/assets/animations/lf30_editor_PsHnfk.json',
@@ -160,6 +167,58 @@ export class RemotePage implements OnInit, OnDestroy {
         event.preventDefault();
         event.stopPropagation();
     }
+
+    toggleHostCamera() {
+    this.hostCameraMinimized = !this.hostCameraMinimized;
+}
+
+toggleLocalCamera() {
+    this.localCameraMinimized = !this.localCameraMinimized;
+}
+
+startDragHost(event: MouseEvent) {
+    event.preventDefault();
+    this.isDraggingHost = true;
+    const pipElement = this.hostCameraVideoRef.nativeElement.parentElement;
+    const rect = pipElement.getBoundingClientRect();
+    this.dragOffset = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+    };
+}
+
+startDragLocal(event: MouseEvent) {
+    event.preventDefault();
+    this.isDraggingLocal = true;
+    const pipElement = this.localVideoRef.nativeElement.parentElement;
+    const rect = pipElement.getBoundingClientRect();
+    this.dragOffset = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+    };
+}
+
+@HostListener('document:mousemove', ['$event'])
+onDrag(event: MouseEvent) {
+    if (this.isDraggingHost) {
+        this.hostCameraPosition = {
+            x: event.clientX - this.dragOffset.x,
+            y: event.clientY - this.dragOffset.y
+        };
+    }
+    if (this.isDraggingLocal) {
+        this.localCameraPosition = {
+            x: event.clientX - this.dragOffset.x,
+            y: event.clientY - this.dragOffset.y
+        };
+    }
+}
+
+@HostListener('document:mouseup')
+stopDrag() {
+    this.isDraggingHost = false;
+    this.isDraggingLocal = false;
+}
 
     @HostListener('document:keydown', ['$event'])
     handleKeyboardEvent(event: KeyboardEvent) {

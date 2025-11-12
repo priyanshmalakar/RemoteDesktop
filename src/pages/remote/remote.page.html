@@ -135,24 +135,72 @@
     [style.cursor]="cursor ? 'default' : 'none'"></video>
 
 <!-- Layer 100: HOST's camera PiP (top-left corner, blue border) -->
-<video
-    #hostCameraVideo
-    id="hostCameraVideo"
-    class="host-camera-pip"
-    autoplay
-    playsinline
-    muted
-    [class.hidden]="!connected"></video>
+<div 
+    class="pip-container host-pip"
+    [class.hidden]="!connected"
+    [class.minimized]="hostCameraMinimized"
+    [style.left.px]="hostCameraPosition.x"
+    [style.top.px]="hostCameraPosition.y"
+    [style.pointer-events]="isDraggingHost ? 'auto' : 'auto'">
+    
+    <div class="pip-header" (mousedown)="startDragHost($event)">
+        <span class="pip-label">Host Camera</span>
+        <div class="pip-controls" (mousedown)="$event.stopPropagation()">
+            <ion-button 
+                fill="clear" 
+                size="small"
+                (click)="toggleHostCamera(); $event.stopPropagation()">
+                <ion-icon 
+                    [name]="hostCameraMinimized ? 'expand' : 'contract'"
+                    slot="icon-only"></ion-icon>
+            </ion-button>
+        </div>
+    </div>
+    
+    <video
+        *ngIf="!hostCameraMinimized"
+        #hostCameraVideo
+        id="hostCameraVideo"
+        class="pip-video"
+        autoplay
+        playsinline
+        muted></video>
+</div>
+
+
 
 <!-- Layer 100: YOUR camera PiP (bottom-left corner, green border) -->
-<video
-    #localVideo
-    id="localVideo"
-    class="local-camera-pip"
-    autoplay
-    playsinline
-    muted
-    [class.hidden]="!connected || !localStream"></video>
+<div 
+    class="pip-container local-pip"
+    [class.hidden]="!connected || !localStream"
+    [class.minimized]="localCameraMinimized"
+    [style.left.px]="localCameraPosition.x"
+    [style.top.px]="localCameraPosition.y"
+    [style.pointer-events]="isDraggingLocal ? 'auto' : 'auto'">
+    
+    <div class="pip-header" (mousedown)="startDragLocal($event)">
+        <span class="pip-label">Your Camera</span>
+        <div class="pip-controls" (mousedown)="$event.stopPropagation()">
+            <ion-button 
+                fill="clear" 
+                size="small"
+                (click)="toggleLocalCamera(); $event.stopPropagation()">
+                <ion-icon 
+                    [name]="localCameraMinimized ? 'expand' : 'contract'"
+                    slot="icon-only"></ion-icon>
+            </ion-button>
+        </div>
+    </div>
+    
+    <video
+        *ngIf="!localCameraMinimized"
+        #localVideo
+        id="localVideo"
+        class="pip-video"
+        autoplay
+        playsinline
+        muted></video>
+</div>
     <!-- Quick controls (bottom center) -->
    <div 
     *ngIf="connected" 

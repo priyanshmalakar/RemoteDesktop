@@ -16,7 +16,7 @@ ion-content {
   filter: blur(20px);
   opacity: 0.3;
   z-index: 0;
-  pointer-events: none; // Don't block mouse events
+  pointer-events: none;
 }
 
 // ========== MAIN SCREEN VIDEO (VISIBLE - HOST's screen with audio) ==========
@@ -30,7 +30,7 @@ ion-content {
   object-fit: contain !important;
   z-index: 1 !important;
   background: #000;
-  pointer-events: none; // Don't capture mouse events - let control layer handle it
+  pointer-events: none;
 }
 
 // ========== CONTROL VIDEO (INVISIBLE - for mouse/keyboard only, NO audio) ==========
@@ -42,12 +42,11 @@ ion-content {
   width: 100vw !important;
   height: 100vh !important;
   object-fit: contain !important;
-  z-index: 2 !important; // Above main video but below PiPs
+  z-index: 2 !important;
   background: transparent;
-  opacity: 0.01; // Nearly invisible but still receives events
-  pointer-events: auto; // This MUST capture mouse events
+  opacity: 0.01;
+  pointer-events: auto;
   
-  // Remove audio from this video element
   &::-webkit-media-controls-panel {
     display: none !important;
   }
@@ -56,54 +55,96 @@ ion-content {
   }
 }
 
-// ========== HOST's CAMERA PiP (TOP LEFT - blue border) ==========
-.host-camera-pip,
-#hostCameraVideo {
+// ========== PiP CONTAINER STYLES ==========
+.pip-container {
   position: fixed !important;
-  top: 20px !important;
-  left: 20px !important;
-  width: 240px !important;
-  height: 180px !important;
-  max-width: 240px !important;
-  max-height: 180px !important;
-  min-width: 240px !important;
-  min-height: 180px !important;
-  border-radius: 12px !important;
-  border: 3px solid #4a90e2 !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8) !important;
-  object-fit: cover !important;
   z-index: 100 !important;
+  border-radius: 12px !important;
   background: #1a1a1a;
-  pointer-events: none; // Don't block mouse on screen
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8) !important;
+  transition: width 0.3s ease, height 0.3s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto !important;
   
-  &.hidden {
-    display: none !important;
+  &.host-pip {
+    width: 240px !important;
+    height: 220px !important;
+    border: 3px solid #4a90e2 !important;
+    
+    &.minimized {
+      height: 40px !important;
+    }
+  }
+  
+  &.local-pip {
+    width: 200px !important;
+    height: 190px !important;
+    border: 3px solid #2ecc71 !important;
+    
+    &.minimized {
+      height: 40px !important;
+    }
   }
 }
 
-// ========== YOUR CAMERA PiP (BOTTOM LEFT - green border) ==========
-.local-camera-pip,
-#localVideo {
-  position: fixed !important;
-  bottom: 100px !important; // Above controls
-  left: 20px !important;
-  width: 200px !important;
-  height: 150px !important;
-  max-width: 200px !important;
-  max-height: 150px !important;
-  min-width: 200px !important;
-  min-height: 150px !important;
-  border-radius: 12px !important;
-  border: 3px solid #2ecc71 !important;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8) !important;
-  object-fit: cover !important;
-  z-index: 100 !important;
-  background: #1a1a1a;
-  pointer-events: none; // Don't block mouse on screen
+.pip-header {
+  height: 40px;
+  min-height: 40px;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  cursor: move;
+  user-select: none;
+  flex-shrink: 0;
+  pointer-events: auto !important;
+  z-index: 101;
   
-  &.hidden {
-    display: none !important;
+  .pip-label {
+    color: white;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
+  
+  .pip-controls {
+    display: flex;
+    gap: 4px;
+    pointer-events: auto !important;
+    
+    ion-button {
+      --padding-start: 4px;
+      --padding-end: 4px;
+      height: 28px;
+      width: 28px;
+      margin: 0;
+      pointer-events: auto !important;
+      
+      ion-icon {
+        font-size: 18px;
+        color: white;
+      }
+      
+      &:hover {
+        opacity: 0.8;
+      }
+    }
+  }
+}
+
+// ========== PiP VIDEO (UNIFIED STYLE) ==========
+.pip-video {
+  width: 100% !important;
+  height: 100% !important;
+  flex: 1;
+  object-fit: cover !important;
+  display: block !important;
+  background: #1a1a1a;
+  pointer-events: none !important;
 }
 
 // ========== VIDEO CONTROLS (BOTTOM CENTER) ==========
@@ -114,7 +155,10 @@ app-quick-controls,
   left: 50% !important;
   transform: translateX(-50%) !important;
   z-index: 101 !important;
-  pointer-events: auto; // Can be clicked
+  pointer-events: auto;
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
 // ========== UTILITY CLASSES ==========
@@ -185,7 +229,7 @@ input.hidden {
 ion-header {
   z-index: 105;
   position: fixed;
-  top: 40px; // Below the dropdown button
+  top: 40px;
   left: 0;
   right: 0;
   pointer-events: auto;
@@ -245,39 +289,6 @@ ion-toolbar {
   }
 }
 
-// ========== RESPONSIVE ADJUSTMENTS ==========
-@media (max-width: 768px) {
-  // Smaller PiP videos on mobile
-  .host-camera-pip,
-  #hostCameraVideo {
-    width: 160px !important;
-    height: 120px !important;
-    max-width: 160px !important;
-    max-height: 120px !important;
-    min-width: 160px !important;
-    min-height: 120px !important;
-    top: 10px !important;
-    left: 10px !important;
-  }
-  
-  .local-camera-pip,
-  #localVideo {
-    width: 140px !important;
-    height: 105px !important;
-    max-width: 140px !important;
-    max-height: 105px !important;
-    min-width: 140px !important;
-    min-height: 105px !important;
-    bottom: 80px !important;
-    left: 10px !important;
-  }
-  
-  app-quick-controls,
-  .video-controls {
-    bottom: 10px !important;
-  }
-}
-
 // ========== REMOVE DEFAULT VIDEO STYLING ==========
 video {
   display: block;
@@ -285,8 +296,54 @@ video {
   padding: 0;
 }
 
-// Remove any default containers
 .video-container {
   display: none !important;
 }
 
+// ========== RESPONSIVE ADJUSTMENTS ==========
+@media (max-width: 768px) {
+  .pip-container {
+    &.host-pip {
+      width: 160px !important;
+      height: 160px !important;
+      
+      &.minimized {
+        height: 36px !important;
+      }
+    }
+    
+    &.local-pip {
+      width: 140px !important;
+      height: 145px !important;
+      
+      &.minimized {
+        height: 36px !important;
+      }
+    }
+  }
+  
+  .pip-header {
+    height: 36px;
+    min-height: 36px;
+    padding: 0 8px;
+    
+    .pip-label {
+      font-size: 11px;
+    }
+    
+    .pip-controls ion-button {
+      height: 24px;
+      width: 24px;
+      
+      ion-icon {
+        font-size: 16px;
+      }
+    }
+  }
+  
+  app-quick-controls,
+  .video-controls {
+    bottom: 10px !important;
+    gap: 8px;
+  }
+}
