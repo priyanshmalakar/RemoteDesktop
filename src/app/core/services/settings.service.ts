@@ -7,7 +7,7 @@ import { get, set } from './storage.service';
 export class SettingsService {
     settings = {
         hiddenAccess: false,
-        randomId: true,
+        randomId: false,
         passwordHash: '',
     };
 
