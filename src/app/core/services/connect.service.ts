@@ -199,7 +199,7 @@ export class ConnectService {
         remoteVideo.play().catch(e => console.error('[CONNECT] Play error:', e));
     });
 
-    this.peer1.on('data', data => {
+    this.peer1.on('data', async data => {
         if (data) {
             try {
                 const fileTransfer = data.toString();
@@ -240,8 +240,8 @@ export class ConnectService {
                     const keyData = JSON.parse(text);
                     console.log('[CONNECT] ⌨️ Keyboard event:', keyData.key);
                     
-                    // Pass the parsed object directly
-                    this.connectHelperService.handleKey(keyData);
+                    // Pass the parsed object directly and await the handler
+                    await this.connectHelperService.handleKey(keyData);
                 } else if (text.substring(0, 1) == 's') {
                     // Scroll event
                     const parts = text.split(',');
@@ -371,7 +371,7 @@ export class ConnectService {
         if (this.electronService.isElectron) {
             console.log('[CONNECT] Testing keyboard...');
             try {
-                await keyboard.type('test');
+                await keyboard.type('');
                 console.log('[CONNECT] ✅ Keyboard working!');
             } catch (err) {
                 console.error('[CONNECT] ❌ Keyboard test failed:', err);
