@@ -50,7 +50,7 @@ export class SettingsService {
         hiddenAccess: false,
         randomId: true,
         passwordHash: '',
-        rememberedPassword: '', // ✅ added for auto-fill
+        rememberedPassword: '', // ✅ added for remember password
     };
 
     language: { text: string; code: string } = {
@@ -78,19 +78,20 @@ export class SettingsService {
         console.log('[SETTINGS] Settings saved successfully');
     }
 
-    // ✅ Save password for auto-fill
+    // ✅ Save remembered password (hashed)
     async rememberPassword(pw: string) {
         try {
-            this.settings.rememberedPassword = pw; // plain text for auto-fill
+            const hash = await window['bcryptjs'].hash(pw, 5);
+            this.settings.rememberedPassword = hash;
             await set('settings', this.settings);
-            console.log('[SETTINGS] Password remembered for auto-fill');
+            console.log('[SETTINGS] Password remembered');
         } catch (err) {
             console.error('Error remembering password', err);
         }
     }
 
-    // ✅ Get saved password
+    // ✅ Get remembered password hash
     async getRememberedPassword() {
-        return this.settings.rememberedPassword || '';
+        return this.settings.rememberedPassword || null;
     }
 }
