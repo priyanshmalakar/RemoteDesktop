@@ -293,22 +293,53 @@ export class MultiRemotePage implements OnInit, OnDestroy {
         }
     }
 
-    sendKeyboardEvent(event: KeyboardEvent) {
-        if (!this.selectedMonitorId) return;
+    // sendKeyboardEvent(event: KeyboardEvent) {
+    //     if (!this.selectedMonitorId) return;
         
-        const monitor = this.monitors.get(this.selectedMonitorId);
-        if (monitor?.peer) {
-            const data = {
-                key: event.key,
-                code: event.code,
-                shift: event.shiftKey,
-                control: event.ctrlKey,
-                alt: event.altKey,
-                meta: event.metaKey
-            };
-            monitor.peer.send(JSON.stringify(data));
-        }
+    //     const monitor = this.monitors.get(this.selectedMonitorId);
+    //     if (monitor?.peer) {
+    //         const data = {
+    //             key: event.key,
+    //             code: event.code,
+    //             shift: event.shiftKey,
+    //             control: event.ctrlKey,
+    //             alt: event.altKey,
+    //             meta: event.metaKey
+    //         };
+    //         monitor.peer.send(JSON.stringify(data));
+    //     }
+    // }
+
+// ======================= UPDATE ESCAPE  =================== 
+
+sendKeyboardEvent(event: KeyboardEvent) {
+    if (!this.selectedMonitorId) return;
+
+    const monitor = this.monitors.get(this.selectedMonitorId);
+    if (!monitor?.peer) return;
+
+    // 🟢 Prevent default browser behavior (so "Escape" text won’t appear)
+    event.preventDefault();
+
+    // 🟢 Custom handling for Escape key
+    if (event.key === 'Escape') {
+        // Send a simple signal instead of typing "Escape"
+        monitor.peer.send(JSON.stringify({ action: 'ESC_PRESSED' }));
+        return;
     }
+
+    // 🔵 For all other keys, keep existing functionality
+    const data = {
+        key: event.key,
+        code: event.code,
+        shift: event.shiftKey,
+        control: event.ctrlKey,
+        alt: event.altKey,
+        meta: event.metaKey
+    };
+    monitor.peer.send(JSON.stringify(data));
+}
+
 
     sendScrollEvent(event: WheelEvent) {
         if (!this.selectedMonitorId) return;
