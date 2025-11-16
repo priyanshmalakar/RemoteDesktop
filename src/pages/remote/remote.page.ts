@@ -113,6 +113,8 @@ export class RemotePage implements OnInit, OnDestroy {
     remoteStream: MediaStream | null = null;
     hostCameraMinimized = false;
 localCameraMinimized = false;
+hostCameraFullscreen = false;
+localCameraFullscreen = false;
 hostCameraPosition = { x: 20, y: 20 };
 localCameraPosition = { x: 20, y: 100 };
 isDraggingHost = false;
@@ -167,19 +169,43 @@ dragOffset = { x: 0, y: 0 };
         event.preventDefault();
         event.stopPropagation();
     }
-
-    toggleHostCamera() {
+toggleHostCamera() {
     this.hostCameraMinimized = !this.hostCameraMinimized;
 }
-
 toggleLocalCamera() {
     this.localCameraMinimized = !this.localCameraMinimized;
 }
 
+toggleHostFullscreen() {
+    this.hostCameraFullscreen = !this.hostCameraFullscreen;
+    if (this.hostCameraFullscreen) {
+        this.hostCameraMinimized = false;
+    }
+}
+
+toggleLocalFullscreen() {
+    this.localCameraFullscreen = !this.localCameraFullscreen;
+    if (this.localCameraFullscreen) {
+        this.localCameraMinimized = false;
+    }
+}
+closeHostCamera() {
+    // Just hide it, don't destroy the stream
+    const hostPip = this.elementRef.nativeElement.querySelector('.host-pip');
+    if (hostPip) {
+        hostPip.style.display = 'none';
+    }
+}
+closeLocalCamera() {
+    this.stopVideoCall();
+}
+
 startDragHost(event: MouseEvent) {
+    if (this.hostCameraFullscreen) return; // Can't drag in fullscreen
     event.preventDefault();
+    event.stopPropagation();
     this.isDraggingHost = true;
-    const pipElement = this.hostCameraVideoRef.nativeElement.parentElement;
+    const pipElement = this.elementRef.nativeElement.querySelector('.host-pip');
     const rect = pipElement.getBoundingClientRect();
     this.dragOffset = {
         x: event.clientX - rect.left,
@@ -188,9 +214,11 @@ startDragHost(event: MouseEvent) {
 }
 
 startDragLocal(event: MouseEvent) {
+    if (this.localCameraFullscreen) return; // Can't drag in fullscreen
     event.preventDefault();
+    event.stopPropagation();
     this.isDraggingLocal = true;
-    const pipElement = this.localVideoRef.nativeElement.parentElement;
+    const pipElement = this.elementRef.nativeElement.querySelector('.local-pip');
     const rect = pipElement.getBoundingClientRect();
     this.dragOffset = {
         x: event.clientX - rect.left,
@@ -200,16 +228,32 @@ startDragLocal(event: MouseEvent) {
 
 @HostListener('document:mousemove', ['$event'])
 onDrag(event: MouseEvent) {
-    if (this.isDraggingHost) {
+    if (this.isDraggingHost && !this.hostCameraFullscreen) {
+        event.preventDefault();
+        const newX = event.clientX - this.dragOffset.x;
+        const newY = event.clientY - this.dragOffset.y;
+        
+        // Boundary checking
+        const maxX = window.innerWidth - 240;
+        const maxY = window.innerHeight - 220;
+        
         this.hostCameraPosition = {
-            x: event.clientX - this.dragOffset.x,
-            y: event.clientY - this.dragOffset.y
+            x: Math.max(0, Math.min(newX, maxX)),
+            y: Math.max(0, Math.min(newY, maxY))
         };
     }
-    if (this.isDraggingLocal) {
+    if (this.isDraggingLocal && !this.localCameraFullscreen) {
+        event.preventDefault();
+        const newX = event.clientX - this.dragOffset.x;
+        const newY = event.clientY - this.dragOffset.y;
+        
+        // Boundary checking
+        const maxX = window.innerWidth - 200;
+        const maxY = window.innerHeight - 190;
+        
         this.localCameraPosition = {
-            x: event.clientX - this.dragOffset.x,
-            y: event.clientY - this.dragOffset.y
+            x: Math.max(0, Math.min(newX, maxX)),
+            y: Math.max(0, Math.min(newY, maxY))
         };
     }
 }

@@ -139,26 +139,53 @@
     class="pip-container host-pip"
     [class.hidden]="!connected"
     [class.minimized]="hostCameraMinimized"
-    [style.left.px]="hostCameraPosition.x"
-    [style.top.px]="hostCameraPosition.y"
-    [style.pointer-events]="isDraggingHost ? 'auto' : 'auto'">
+    [class.fullscreen]="hostCameraFullscreen"
+    [style.left.px]="hostCameraFullscreen ? 0 : hostCameraPosition.x"
+    [style.top.px]="hostCameraFullscreen ? 0 : hostCameraPosition.y">
     
     <div class="pip-header" (mousedown)="startDragHost($event)">
-        <span class="pip-label">Host Camera</span>
+        <span class="pip-label">
+            <ion-icon name="videocam"></ion-icon>
+            Host Camera
+        </span>
         <div class="pip-controls" (mousedown)="$event.stopPropagation()">
+            <!-- Minimize/Restore button -->
             <ion-button 
                 fill="clear" 
                 size="small"
+                [tp]="hostCameraMinimized ? 'Restore' : 'Minimize'"
                 (click)="toggleHostCamera(); $event.stopPropagation()">
                 <ion-icon 
-                    [name]="hostCameraMinimized ? 'expand' : 'contract'"
+                    [name]="hostCameraMinimized ? 'remove' : 'remove'"
+                    slot="icon-only"></ion-icon>
+            </ion-button>
+            
+            <!-- Fullscreen toggle button -->
+            <ion-button 
+                fill="clear" 
+                size="small"
+                [tp]="hostCameraFullscreen ? 'Exit Fullscreen' : 'Fullscreen'"
+                (click)="toggleHostFullscreen(); $event.stopPropagation()">
+                <ion-icon 
+                    [name]="hostCameraFullscreen ? 'contract' : 'expand'"
+                    slot="icon-only"></ion-icon>
+            </ion-button>
+            
+            <!-- Close button -->
+            <ion-button 
+                fill="clear" 
+                size="small"
+                tp="Close"
+                (click)="closeHostCamera(); $event.stopPropagation()">
+                <ion-icon 
+                    name="close"
                     slot="icon-only"></ion-icon>
             </ion-button>
         </div>
     </div>
     
     <video
-        *ngIf="!hostCameraMinimized"
+        [style.display]="hostCameraMinimized ? 'none' : 'block'"
         #hostCameraVideo
         id="hostCameraVideo"
         class="pip-video"
@@ -168,32 +195,58 @@
 </div>
 
 
-
 <!-- Layer 100: YOUR camera PiP (bottom-left corner, green border) -->
 <div 
     class="pip-container local-pip"
     [class.hidden]="!connected || !localStream"
     [class.minimized]="localCameraMinimized"
-    [style.left.px]="localCameraPosition.x"
-    [style.top.px]="localCameraPosition.y"
-    [style.pointer-events]="isDraggingLocal ? 'auto' : 'auto'">
+    [class.fullscreen]="localCameraFullscreen"
+    [style.left.px]="localCameraFullscreen ? 0 : localCameraPosition.x"
+    [style.top.px]="localCameraFullscreen ? 0 : localCameraPosition.y">
     
     <div class="pip-header" (mousedown)="startDragLocal($event)">
-        <span class="pip-label">Your Camera</span>
+        <span class="pip-label">
+            <ion-icon name="person-circle"></ion-icon>
+            Your Camera
+        </span>
         <div class="pip-controls" (mousedown)="$event.stopPropagation()">
+            <!-- Minimize/Restore button -->
             <ion-button 
                 fill="clear" 
                 size="small"
+                [tp]="localCameraMinimized ? 'Restore' : 'Minimize'"
                 (click)="toggleLocalCamera(); $event.stopPropagation()">
                 <ion-icon 
-                    [name]="localCameraMinimized ? 'expand' : 'contract'"
+                    [name]="localCameraMinimized ? 'remove' : 'remove'"
+                    slot="icon-only"></ion-icon>
+            </ion-button>
+            
+            <!-- Fullscreen toggle button -->
+            <ion-button 
+                fill="clear" 
+                size="small"
+                [tp]="localCameraFullscreen ? 'Exit Fullscreen' : 'Fullscreen'"
+                (click)="toggleLocalFullscreen(); $event.stopPropagation()">
+                <ion-icon 
+                    [name]="localCameraFullscreen ? 'contract' : 'expand'"
+                    slot="icon-only"></ion-icon>
+            </ion-button>
+            
+            <!-- Close button -->
+            <ion-button 
+                fill="clear" 
+                size="small"
+                tp="Close"
+                (click)="closeLocalCamera(); $event.stopPropagation()">
+                <ion-icon 
+                    name="close"
                     slot="icon-only"></ion-icon>
             </ion-button>
         </div>
     </div>
     
     <video
-        *ngIf="!localCameraMinimized"
+       [style.display]="localCameraMinimized ? 'none' : 'block'"
         #localVideo
         id="localVideo"
         class="pip-video"
