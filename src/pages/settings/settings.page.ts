@@ -252,7 +252,6 @@
 
 
 
-
 import {
     ChangeDetectorRef,
     Component,
@@ -351,7 +350,7 @@ export class SetPwDialog implements OnInit {
     }
 
     async save() {
-        if (this.data.pw == this.data.newPw) {
+        if (this.data.pw === this.data.newPw) {
             this.modalCtrl.dismiss(this.data, 'save');
         } else {
             const toast = await this.toastController.create({
@@ -375,7 +374,6 @@ export class SetPwDialog implements OnInit {
 export class SettingsPage implements OnInit {
     compName = '';
     autoStartEnabled = false;
-    autoLaunch;
     hiddenAccess = false;
 
     constructor(
@@ -446,8 +444,8 @@ export class SettingsPage implements OnInit {
 
         const { data } = await modal.onWillDismiss();
         if (data?.pw) {
-            await this.setPwHash(data.pw);
-            await this.settingsService.rememberPassword(data.pw); // ✅ remember password
+            await this.setPwHash(data.pw);                     // hash password for backend
+            await this.settingsService.rememberPassword(data.pw); // ✅ save for auto-fill
         }
     }
 

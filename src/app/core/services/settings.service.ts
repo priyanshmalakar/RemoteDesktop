@@ -39,7 +39,6 @@
 
 
 
-
 import { Injectable } from '@angular/core';
 import { get, set } from './storage.service';
 
@@ -51,7 +50,7 @@ export class SettingsService {
         hiddenAccess: false,
         randomId: true,
         passwordHash: '',
-        rememberedPassword: '', // ✅ added for remember password
+        rememberedPassword: '', // ✅ added for auto-fill
     };
 
     language: { text: string; code: string } = {
@@ -79,20 +78,19 @@ export class SettingsService {
         console.log('[SETTINGS] Settings saved successfully');
     }
 
-    // ✅ Save remembered password (hashed)
+    // ✅ Save password for auto-fill
     async rememberPassword(pw: string) {
         try {
-            const hash = await window['bcryptjs'].hash(pw, 5);
-            this.settings.rememberedPassword = hash;
+            this.settings.rememberedPassword = pw; // plain text for auto-fill
             await set('settings', this.settings);
-            console.log('[SETTINGS] Password remembered');
+            console.log('[SETTINGS] Password remembered for auto-fill');
         } catch (err) {
             console.error('Error remembering password', err);
         }
     }
 
-    // ✅ Get remembered password hash
+    // ✅ Get saved password
     async getRememberedPassword() {
-        return this.settings.rememberedPassword || null;
+        return this.settings.rememberedPassword || '';
     }
 }
