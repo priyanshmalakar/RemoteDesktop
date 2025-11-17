@@ -39,8 +39,11 @@
 
 
 
+
+
 import { Injectable } from '@angular/core';
 import { get, set } from './storage.service';
+import { encrypt, decrypt } from './storage.service';
 
 @Injectable({
     providedIn: 'root',
@@ -50,7 +53,7 @@ export class SettingsService {
         hiddenAccess: false,
         randomId: true,
         passwordHash: '',
-        rememberedPassword: '', // ✅ added for remember password
+        savedPassword: '' // NEW FIELD (encrypted plain password)
     };
 
     language: { text: string; code: string } = {
@@ -60,9 +63,13 @@ export class SettingsService {
 
     constructor() {}
 
+    // -----------------------------------------
+    // LOAD SETTINGS
+    // -----------------------------------------
     async load() {
         console.log('[SETTINGS] Loading settings...');
         const settings: any = await get('settings');
+
         if (settings) {
             Object.assign(this.settings, settings);
             console.log('[SETTINGS] Loaded:', this.settings);
@@ -71,6 +78,9 @@ export class SettingsService {
         }
     }
 
+    // -----------------------------------------
+    // SAVE GENERAL SETTINGS
+    // -----------------------------------------
     async saveSettings(settings) {
         console.log('[SETTINGS] Saving settings:', settings);
         Object.assign(this.settings, settings);
@@ -78,20 +88,54 @@ export class SettingsService {
         console.log('[SETTINGS] Settings saved successfully');
     }
 
-    // ✅ Save remembered password (hashed)
-    async rememberPassword(pw: string) {
+    // -----------------------------------------
+    // SAVE PLAIN PASSWORD ENCRYPTED
+    // -----------------------------------------
+    async setPlainPassword(pw: string) {
+        const encrypted = encrypt(pw);
+        this.settings.savedPassword = encrypted;
+        await set('settings', this.settings);
+    }
+
+    // -----------------------------------------
+    // GET PLAIN PASSWORD (DECRYPTED)
+    // -----------------------------------------
+    async getPlainPassword(): Promise<string> {
+        const settings: any = await get('settings');
+        if (!settings?.savedPassword) return '';
         try {
-            const hash = await window['bcryptjs'].hash(pw, 5);
-            this.settings.rememberedPassword = hash;
-            await set('settings', this.settings);
-            console.log('[SETTINGS] Password remembered');
+            return decrypt(settings.savedPassword);
         } catch (err) {
-            console.error('Error remembering password', err);
+            console.error('Password decrypt error:', err);
+            return '';
         }
     }
 
-    // ✅ Get remembered password hash
-    async getRememberedPassword() {
-        return this.settings.rememberedPassword || null;
+    // -----------------------------------------
+    // CLIENT-SPECIFIC PASSWORD SAVE
+    // -----------------------------------------
+    async saveClientPassword(clientId: string, pw: string) {
+        let map = await get('client-passwords');
+        if (!map) map = {};
+
+        map[clientId] = encrypt(pw);
+
+        await set('client-passwords', map);
+    }
+
+    // -----------------------------------------
+    // CLIENT-SPECIFIC PASSWORD GET (AUTO-FILL)
+    // -----------------------------------------
+    async getClientPassword(clientId: string): Promise<string> {
+        const map = await get('client-passwords');
+        if (map && map[clientId]) {
+            try {
+                return decrypt(map[clientId]);
+            } catch (err) {
+                console.error('Client password decrypt failed:', err);
+                return '';
+            }
+        }
+        return '';
     }
 }

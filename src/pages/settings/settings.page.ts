@@ -252,6 +252,8 @@
 
 
 
+
+
 import {
     ChangeDetectorRef,
     Component,
@@ -325,7 +327,7 @@ export interface DialogData {
         </ion-footer>
     `,
 })
-export class SetPwDialog implements OnInit {
+export class SetPwDialog {
     @Input() data: DialogData;
 
     @HostListener('document:keydown.enter', ['$event'])
@@ -337,17 +339,8 @@ export class SetPwDialog implements OnInit {
 
     constructor(
         private modalCtrl: ModalController,
-        private toastController: ToastController,
-        private settingsService: SettingsService
+        private toastController: ToastController
     ) {}
-
-    async ngOnInit() {
-        const remembered = await this.settingsService.getRememberedPassword();
-        if (remembered) {
-            this.data.pw = remembered;
-            this.data.newPw = remembered;
-        }
-    }
 
     async save() {
         if (this.data.pw == this.data.newPw) {
@@ -375,6 +368,7 @@ export class SettingsPage implements OnInit {
     compName = '';
     autoStartEnabled = false;
     autoLaunch;
+
     hiddenAccess = false;
 
     constructor(
@@ -389,11 +383,14 @@ export class SettingsPage implements OnInit {
 
     ngOnInit() {
         try {
-            const loginSettings = this.electronService.app.getLoginItemSettings();
-            this.autoStartEnabled = loginSettings?.executableWillLaunchAtLogin ?? false;
+            const loginSettings =
+                this.electronService.app.getLoginItemSettings();
+            this.autoStartEnabled =
+                loginSettings?.executableWillLaunchAtLogin ?? false;
         } catch (err) {
             console.warn('Could not get login item settings', err);
         }
+
         try {
             this.compName = this.electronService.os.hostname();
         } catch (err) {
@@ -414,46 +411,77 @@ export class SettingsPage implements OnInit {
         const actionSheetCtrl = await this.actionSheetCtrl.create({
             translucent: true,
             buttons: [
-                { text: 'Deutsch', handler: () => this.changeLanguage({ code: 'de', text: 'Deutsch' }) },
-                { text: 'English', handler: () => this.changeLanguage({ code: 'en', text: 'English' }) },
+                {
+                    text: 'Deutsch',
+                    handler: () => {
+                        this.changeLanguage({ code: 'de', text: 'Deutsch' });
+                    },
+                },
+                {
+                    text: 'English',
+                    handler: () => {
+                        this.changeLanguage({ code: 'en', text: 'English' });
+                    },
+                },
             ],
         });
+
         await actionSheetCtrl.present();
     }
 
     async changeLanguage(selection: { text: string; code: string }) {
-        await this.settingsService.saveSettings({ language: selection });
+        await this.settingsService.saveSettings({
+            language: selection,
+        });
+
         this.settingsService.language = selection;
         this.translate.use(selection.code);
     }
 
     async changeHiddenAccess() {
-        await this.settingsService.saveSettings({ hiddenAccess: this.settingsService.settings.hiddenAccess });
+        await this.settingsService.saveSettings({
+            hiddenAccess: this.settingsService.settings.hiddenAccess,
+        });
     }
 
     async randomIdChange() {
-        await this.settingsService.saveSettings({ randomId: this.settingsService.settings.randomId });
+        await this.settingsService.saveSettings({
+            randomId: this.settingsService.settings.randomId,
+        });
         this.connectService.reconnect();
     }
 
+    // ============================================================
+    // SHOW PASSWORD DIALOG WITH PRE-FILLED SAVED PASSWORD
+    // ============================================================
     async addPw() {
+        const savedPw = await this.settingsService.getPlainPassword();
+
         const modal = await this.modalCtrl.create({
             component: SetPwDialog,
-            componentProps: { data: { pw: '', newPw: '' } },
+            componentProps: {
+                data: {
+                    pw: savedPw || '',
+                    newPw: savedPw || '',
+                },
+            },
         });
+
         modal.present();
 
         const { data } = await modal.onWillDismiss();
         if (data?.pw) {
             await this.setPwHash(data.pw);
-            await this.settingsService.rememberPassword(data.pw); // ✅ remember password
+            await this.settingsService.setPlainPassword(data.pw);
         }
     }
 
     async setPwHash(pw) {
         try {
             const hash = await this.electronService.bcryptjs.hash(pw, 5);
-            await this.settingsService.saveSettings({ passwordHash: hash });
+            await this.settingsService.saveSettings({
+                passwordHash: hash,
+            });
         } catch (err) {
             console.error('setPwHash error', err);
         }
@@ -481,7 +509,21 @@ export class SettingsPage implements OnInit {
         }
     }
 
+    // ============================================================
+    // CLIENT AUTO-FILL PASSWORD (CALL THIS WHEN CONNECTING)
+    // ============================================================
+    async connectToClient(clientId: string) {
+        const savedPw = await this.settingsService.getClientPassword(clientId);
+
+        // आप यहां अपने connect popup में password auto-fill करोगे
+        console.log('Auto-filled client password:', savedPw);
+
+        // Connect logic यहां use कर सकते हैं:
+        // this.connectService.connect(clientId, savedPw);
+    }
+
     screenSelect(primary: boolean, secondary: boolean) {
         console.log('Screen select clicked', { primary, secondary });
     }
 }
+
