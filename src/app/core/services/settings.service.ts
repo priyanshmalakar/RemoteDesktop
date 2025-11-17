@@ -51,7 +51,7 @@ import { encrypt, decrypt } from './storage.service';
 export class SettingsService {
     settings = {
         hiddenAccess: false,
-        randomId: true,
+        randomId: false,
         passwordHash: '',
         savedPassword: '' // NEW FIELD (encrypted plain password)
     };
