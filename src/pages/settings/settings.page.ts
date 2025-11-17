@@ -401,14 +401,16 @@ export class SettingsPage implements OnInit {
         }
         this.cdr.detectChanges();
     }
-
-    async checkForUpdates() {
-        try {
-            await this.electronService.autoUpdater.autoUpdater.checkForUpdates();
-        } catch (error) {
-            console.log('error', error);
-        }
+async checkForUpdates() {
+    try {
+        const result = await this.electronService.autoUpdater.autoUpdater.checkForUpdates();
+        console.log('Update check result:', result);
+        // Show user a message that check is complete
+    } catch (error) {
+        console.log('Update check failed:', error);
+        // Show user error message
     }
+}
 
     public async selectLanguage(ev): Promise<any> {
         const actionSheetCtrl = await this.actionSheetCtrl.create({

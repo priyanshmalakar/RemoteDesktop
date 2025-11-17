@@ -287,13 +287,17 @@ stopDrag() {
         this.calcVideoSize();
     }
 
-    @HostListener('document:paste', ['$event'])
-    onPaste(event: ClipboardEvent) {
-        const text: string | undefined = event?.clipboardData?.getData('text');
-        if (this.peer2 && text) {
-            this.peer2.send('clipboard-' + text);
-        }
+   @HostListener('document:paste', ['$event'])
+onPaste(event: ClipboardEvent) {
+    if (!this.connected) return; 
+
+    const text = event.clipboardData?.getData('text');
+    if (this.peer2 && text) {
+        event.preventDefault();
+        this.peer2.send('clipboard-' + text);
     }
+}
+
    
 
     toggleAudio() {
