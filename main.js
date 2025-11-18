@@ -58,8 +58,8 @@ if (process.platform === 'linux') {
 }
 electron_updater_1.autoUpdater.setFeedURL({
     provider: 'github',
-    owner: 'WebZone',
-    repo: 'remotecontrol-desktop',
+    owner: 'priyanshmalakar',
+    repo: 'RemoteDesktop',
     private: false,
     releaseType: 'release',
 });
