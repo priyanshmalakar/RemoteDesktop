@@ -634,9 +634,9 @@ export class ConnectService {
         const clipboard = this.electronService.clipboard;
         clipboard
             .on('text-changed', () => {
-                if (this.peer1 && this.connected) {
+                if (this.peer1 && this.connected && this.peer1.connected) {
                     const currentText = clipboard.readText();
-                    this.peer1.send('clipboard-' + currentText);
+                    try { this.peer1.send('clipboard-' + currentText); } catch {}
                 }
             })
             .on('image-changed', () => {
@@ -671,7 +671,8 @@ export class ConnectService {
     }
 
     async videoConnector() {
-        this.loading.dismiss();
+        // close any loader
+        try { this.loading?.dismiss(); } catch {}
 
         // SCREEN SHARE stream
         const source = this.videoSource;
@@ -712,6 +713,7 @@ export class ConnectService {
         });
 
         this.peer1.on('error', (err) => {
+            console.error('[CONNECT] peer error', err);
             this.reconnect();
         });
 
@@ -724,14 +726,14 @@ export class ConnectService {
             this.clipboardListener();
             this.connectHelperService.showInfoWindow();
             const win = this.electronService.window;
-            win.minimize();
+            try { win.minimize(); } catch {}
+
+            // Show chat window for this side (both sides call this on successful connect)
+            this.createChatUI();
 
             setTimeout(async () => {
                 await this.startLocalCamera();
             }, 1000);
-
-            // Show chat window
-            this.showChatWindow();
         });
 
         this.peer1.on('stream', (remoteStream) => {
@@ -803,7 +805,9 @@ export class ConnectService {
                         this.connectHelperService.handleMouse(text);
                     }
 
-                } catch (error) {}
+                } catch (error) {
+                    console.error('[CONNECT] data handler error', error);
+                }
             }
         });
     }
@@ -817,7 +821,7 @@ export class ConnectService {
 
             if (this.peer1 && this.cameraStream) {
                 this.cameraStream.getTracks().forEach(track => {
-                    this.peer1.addTrack(track, this.cameraStream!);
+                    try { this.peer1.addTrack(track, this.cameraStream!); } catch {}
                 });
             }
 
@@ -842,6 +846,7 @@ export class ConnectService {
             localVideo.play();
             return this.cameraStream;
         } catch (err) {
+            console.warn('[CONNECT] camera not available', err);
             return null;
         }
     }
@@ -905,15 +910,12 @@ export class ConnectService {
                         return;
                     } else {
                         const win = this.electronService.window;
-                        win.show();
-                        win.focus();
-                        win.restore();
-
+                        try { win.show(); win.focus(); win.restore(); } catch {}
                         const result = await this.askForConnectPermission();
                         this.dialog = false;
                         if (!result) {
                             this.socketService.sendMessage('decline');
-                            this.loading.dismiss();
+                            try { this.loading.dismiss(); } catch {}
                             return;
                         }
                         await this.videoConnector();
@@ -927,12 +929,12 @@ export class ConnectService {
                     if (pwCorrect) await this.videoConnector();
                     else {
                         this.socketService.sendMessage('pwWrong');
-                        this.loading.dismiss();
+                        try { this.loading.dismiss(); } catch {}
                         const alert = await this.alertCtrl.create({ header: 'Password not correct', buttons: ['OK'] });
                         await alert.present();
                     }
                 } else if (data.startsWith('decline')) {
-                    this.loading.dismiss();
+                    try { this.loading.dismiss(); } catch {}
                 } else if (this.peer1) {
                     this.peer1.signal(data);
                 }
@@ -943,14 +945,18 @@ export class ConnectService {
     }
 
     replaceVideo(stream) {
-        this.peer1.removeStream(this.screenStream);
+        try {
+            this.peer1.removeStream(this.screenStream);
+        } catch {}
         this.screenStream = stream;
-        this.peer1.addStream(stream);
+        try {
+            this.peer1.addStream(stream);
+        } catch {}
     }
 
     async reconnect() {
         const win = this.electronService.window;
-        win.restore();
+        try { win.restore(); } catch {}
         this.connected = false;
 
         if (this.cameraStream) this.cameraStream.getTracks().forEach(track => track.stop());
@@ -961,6 +967,9 @@ export class ConnectService {
         if (localVideo) localVideo.remove();
         if (remoteVideo) remoteVideo.remove();
 
+        // Remove chat
+        this.removeChatWindow();
+
         await this.destroy();
         setTimeout(() => this.init(), 500);
         this.connectHelperService.closeInfoWindow();
@@ -968,11 +977,11 @@ export class ConnectService {
 
     async destroy() {
         this.initialized = false;
-        await this.peer1?.destroy();
-        await this.socketService?.destroy();
-        await this.socketSub?.unsubscribe();
-        await this.sub3?.unsubscribe();
-        await this.electronService.remote.screen.removeAllListeners();
+        try { await this.peer1?.destroy(); } catch {}
+        try { await this.socketService?.destroy(); } catch {}
+        try { this.socketSub?.unsubscribe(); } catch {}
+        try { this.sub3?.unsubscribe(); } catch {}
+        try { this.electronService.remote.screen.removeAllListeners(); } catch {}
     }
 
     connect(id) {
@@ -1010,7 +1019,8 @@ export class ConnectService {
     }
 
     // ========================= CHAT FUNCTIONS =============================
-    showChatWindow() {
+    createChatUI() {
+        // If chat already exists, do nothing
         if (document.getElementById("chatBox")) return;
 
         const box = document.createElement("div");
@@ -1018,8 +1028,8 @@ export class ConnectService {
         box.style.position = "fixed";
         box.style.bottom = "10px";
         box.style.right = "200px";
-        box.style.width = "250px";
-        box.style.height = "320px";
+        box.style.width = "300px";
+        box.style.height = "360px";
         box.style.background = "#1e1e1e";
         box.style.border = "2px solid white";
         box.style.borderRadius = "10px";
@@ -1028,31 +1038,127 @@ export class ConnectService {
         box.style.flexDirection = "column";
         box.style.color = "white";
         box.style.fontFamily = "sans-serif";
+        box.style.boxShadow = "0 6px 18px rgba(0,0,0,0.4)";
 
         box.innerHTML = `
-            <div style="padding:8px; background:#333; border-bottom:2px solid #444; font-weight:bold;">
-                Live Chat
+            <div id="chatHeader" style="padding:8px; background:#333; border-bottom:2px solid #444; display:flex; align-items:center; justify-content:space-between;">
+                <div style="font-weight:bold;">Live Chat</div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <button id="chatMinBtn" title="Minimize" style="border:none; background:transparent; color:white; cursor:pointer; font-weight:bold;">_</button>
+                    <button id="chatMaxBtn" title="Maximize" style="border:none; background:transparent; color:white; cursor:pointer; font-weight:bold; display:none;">☐</button>
+                    <button id="chatCloseBtn" title="Close" style="border:none; background:transparent; color:white; cursor:pointer; font-weight:bold;">✕</button>
+                </div>
             </div>
-            <div id="chatMessages" style="flex:1; padding:8px; overflow-y:auto; font-size:14px;"></div>
-            <div style="padding:6px; display:flex; gap:4px;">
+            <div id="chatMessages" style="flex:1; padding:8px; overflow-y:auto; font-size:14px; background:transparent;"></div>
+            <div id="chatInputWrapper" style="padding:6px; display:flex; gap:4px; border-top:1px solid #333;">
                 <input id="chatInput" placeholder="Type message..." 
-                    style="flex:1; padding:6px; border-radius:4px; border:none; outline:none;"/>
+                    style="flex:1; padding:8px; border-radius:6px; border:1px solid #444; outline:none; background:#2b2b2b; color:white;"/>
                 <button id="chatSend" 
-                    style="padding:6px 10px; background:#007bff; color:white; border:none; border-radius:4px; cursor:pointer;">
+                    style="padding:8px 10px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer;">
                     Send
                 </button>
             </div>
         `;
+
         document.body.appendChild(box);
 
         const sendBtn = document.getElementById("chatSend");
         const input = document.getElementById("chatInput") as HTMLInputElement;
+        const minBtn = document.getElementById("chatMinBtn");
+        const maxBtn = document.getElementById("chatMaxBtn");
+        const closeBtn = document.getElementById("chatCloseBtn");
+        const messages = document.getElementById("chatMessages");
+        const inputWrapper = document.getElementById("chatInputWrapper");
 
-        sendBtn?.addEventListener("click", () => {
+        // Send function
+        const doSend = () => {
             if (!input.value.trim()) return;
-            this.peer1.send("chat-" + input.value);
-            this.addChatMessage("You", input.value);
+            const text = input.value.trim();
+            try {
+                if (this.peer1 && this.peer1.connected) {
+                    this.peer1.send("chat-" + text);
+                } else {
+                    // still show locally even if not connected
+                    console.warn('[CHAT] peer not connected, showing locally only');
+                }
+            } catch (e) {
+                console.error('[CHAT] send error', e);
+            }
+            this.addChatMessage("You", text);
             input.value = "";
+            input.focus();
+        };
+
+        sendBtn?.addEventListener("click", () => doSend());
+
+        // Enter to send, Shift+Enter for newline
+        input.addEventListener("keydown", (ev: KeyboardEvent) => {
+            if (ev.key === "Enter" && !ev.shiftKey) {
+                ev.preventDefault();
+                doSend();
+            }
+        });
+
+        // Minimize / Maximize behavior
+        const toggleMinimize = (minimize: boolean) => {
+            if (minimize) {
+                // minimized: show only header
+                (messages as HTMLElement).style.display = "none";
+                (inputWrapper as HTMLElement).style.display = "none";
+                box.style.height = "44px";
+                minBtn!.style.display = "none";
+                maxBtn!.style.display = "inline-block";
+            } else {
+                (messages as HTMLElement).style.display = "block";
+                (inputWrapper as HTMLElement).style.display = "flex";
+                box.style.height = "360px";
+                minBtn!.style.display = "inline-block";
+                maxBtn!.style.display = "none";
+            }
+        };
+
+        minBtn?.addEventListener("click", () => toggleMinimize(true));
+        maxBtn?.addEventListener("click", () => toggleMinimize(false));
+        closeBtn?.addEventListener("click", () => this.removeChatWindow());
+
+        // focus input on creation
+        setTimeout(() => {
+            try { input.focus(); } catch {}
+        }, 50);
+
+        // make draggable from header (simple)
+        const header = document.getElementById("chatHeader")!;
+        let dragging = false;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        header.addEventListener("mousedown", (e: MouseEvent) => {
+            dragging = true;
+            const rect = box.getBoundingClientRect();
+            offsetX = e.clientX - rect.left;
+            offsetY = e.clientY - rect.top;
+            header.style.cursor = "grabbing";
+        });
+
+        document.addEventListener("mouseup", () => {
+            dragging = false;
+            header.style.cursor = "default";
+        });
+
+        document.addEventListener("mousemove", (e: MouseEvent) => {
+            if (!dragging) return;
+            let left = e.clientX - offsetX;
+            let top = e.clientY - offsetY;
+
+            // clamp to viewport
+            const w = window.innerWidth, h = window.innerHeight;
+            left = Math.max(6, Math.min(left, w - box.offsetWidth - 6));
+            top = Math.max(6, Math.min(top, h - box.offsetHeight - 6));
+
+            box.style.right = 'auto';
+            box.style.left = left + 'px';
+            box.style.top = top + 'px';
+            box.style.bottom = 'auto';
         });
     }
 
@@ -1060,13 +1166,33 @@ export class ConnectService {
         const container = document.getElementById("chatMessages");
         if (!container) return;
         const div = document.createElement("div");
-        div.style.margin = "4px 0";
-        div.innerHTML = `<b>${sender}:</b> ${msg}`;
+        div.style.margin = "6px 0";
+        div.style.wordBreak = "break-word";
+
+        if (sender === "You") {
+            div.innerHTML = `<div style="text-align:right;"><span style="display:inline-block; padding:6px 10px; background:#007bff; color:white; border-radius:10px; max-width:80%;">${this.escapeHtml(msg)}</span></div>`;
+        } else {
+            div.innerHTML = `<div style="text-align:left;"><span style="display:inline-block; padding:6px 10px; background:#2b2b2b; color:white; border-radius:10px; max-width:80%;">${this.escapeHtml(msg)}</span></div>`;
+        }
+
         container.appendChild(div);
         container.scrollTop = container.scrollHeight;
     }
-}
 
+    escapeHtml(unsafe: string) {
+        return unsafe
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    removeChatWindow() {
+        const box = document.getElementById("chatBox");
+        if (box) box.remove();
+    }
+}
 
 
 
