@@ -123,6 +123,7 @@ export class SettingsPage implements OnInit {
         private modalCtrl: ModalController,
         private translate: TranslateService,
         private actionSheetCtrl: ActionSheetController,
+        private toastController: ToastController,
         public settingsService: SettingsService,
         public connectService: ConnectService
     ) {}
@@ -143,12 +144,32 @@ export class SettingsPage implements OnInit {
     }
 
     async checkForUpdates() {
-        try {
-            await this.electronService.autoUpdater.autoUpdater.checkForUpdates();
-        } catch (error) {
-            console.log('error', error);
+    try {
+        const result = await this.electronService.ipcRenderer.invoke('CHECK_FOR_UPDATES');
+        
+        if (result.success) {
+            console.log('Update check successful:', result);
+            // Show success toast to user
+            const toast = await this.toastController.create({
+                message: 'Update check completed',
+                duration: 2000,
+                color: 'success'
+            });
+            await toast.present();
+        } else {
+            console.error('Update check failed:', result.error);
+            // Show error toast to user
+            const toast = await this.toastController.create({
+                message: 'Update check failed: ' + result.error,
+                duration: 3000,
+                color: 'danger'
+            });
+            await toast.present();
         }
+    } catch (error) {
+        console.log('error', error);
     }
+}
 
     public async selectLanguage(ev): Promise<any> {
         const actionSheetCtrl = await this.actionSheetCtrl.create({
