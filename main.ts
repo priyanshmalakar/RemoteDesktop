@@ -21,11 +21,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 require('@electron/remote/main').initialize();
 
-Object.defineProperty(app, 'isPackaged', {
-    get() {
-        return true;
-    }
-});
+
 
 ipcMain.handle('DESKTOP_CAPTURER_GET_SOURCES', (event, opts) =>
     desktopCapturer.getSources(opts)
