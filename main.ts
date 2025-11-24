@@ -17,8 +17,13 @@ import { autoUpdater } from 'electron-updater';
 
 import * as path from 'path';
 import * as url from 'url';
-import * as dotenv from 'dotenv';
-dotenv.config();
+
+
+const isDev = process.env.NODE_ENV !== 'production';
+if (isDev) {
+    require('dotenv').config();
+}
+
 require('@electron/remote/main').initialize();
 
 
@@ -51,8 +56,8 @@ autoUpdater.setFeedURL({
     provider: 'github',
     owner: 'priyanshmalakar',
     repo: 'RemoteDesktop',
-    private: true,
-    token: process.env.GH_TOKEN,
+    private: false,
+    //  token: isDev ? process.env.GH_TOKEN : '',
     releaseType: 'release',
 });
 autoUpdater.autoDownload = true;
