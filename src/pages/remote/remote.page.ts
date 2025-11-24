@@ -21,7 +21,7 @@ import 'webrtc-adapter';
 import { SocketService } from '../../app/core/services/socket.service';
 import { AppService } from './../../app/core/services/app.service';
 import { ElectronService } from '../../app/core/services/electron.service';
-
+import { AddressBookService } from '../../app/core/services/address-book.service';
 @Component({
     template: `
         <ion-header>
@@ -36,7 +36,16 @@ import { ElectronService } from '../../app/core/services/electron.service';
                     [(ngModel)]="pw"
                     label-placement="floating"
                     fill="solid"
+                    type="password"
                     placeholder="Enter text"></ion-input>
+                
+                <ion-item lines="none" class="mt-3">
+                    <ion-checkbox 
+                        slot="start" 
+                        [(ngModel)]="rememberPassword">
+                    </ion-checkbox>
+                    <ion-label>{{ 'Remember password' | translate }}</ion-label>
+                </ion-item>
             </div>
         </ion-content>
         <ion-footer>
@@ -55,7 +64,7 @@ import { ElectronService } from '../../app/core/services/electron.service';
 })
 export class PwDialog {
     @Input() pw = '';
-
+@Input() rememberPassword = true;
     @HostListener('document:keydown.enter', ['$event'])
     handleKeyboardEvent(event: KeyboardEvent) {
         event.preventDefault();
@@ -66,7 +75,10 @@ export class PwDialog {
     constructor(private modalCtrl: ModalController) {}
 
     connect() {
-        return this.modalCtrl.dismiss(this.pw);
+        return this.modalCtrl.dismiss({
+            password: this.pw,
+            rememberPassword: this.rememberPassword
+        });
     }
 
     cancel() {
@@ -132,6 +144,7 @@ dragOffset = { x: 0, y: 0 };
     private boundDblClickListener: any;
     private boundMouseUpListener: any;
     private boundMouseDownListener: any;
+    private pendingPassword: { password: string, shouldRemember: boolean, id: string } | null = null;
     
 
     @HostListener('document:dragover', ['$event'])
@@ -332,7 +345,9 @@ onPaste(event: ClipboardEvent) {
         public electronService: ElectronService,
         private modalCtrl: ModalController,
         private cdr: ChangeDetectorRef,
-        private alertCtrl: AlertController
+        private alertCtrl: AlertController,
+        private addressBookService: AddressBookService,
+        
     ) {}
 
     fileChangeEvent(event) {
@@ -343,17 +358,25 @@ onPaste(event: ClipboardEvent) {
         this.peer2.send('file-' + fileID);
     }
 
-    pwPrompt() {
-        return new Promise<string>(async resolve => {
-            const modal = await this.modalCtrl.create({
-                component: PwDialog,
-            });
-            modal.present();
-
-            const { data } = await modal.onWillDismiss();
-            resolve(data);
+    async pwPrompt(id: string) {
+    
+    const savedPassword = await this.addressBookService.getPassword(id);
+    
+    
+    return new Promise<any>(async resolve => {
+        const modal = await this.modalCtrl.create({
+            component: PwDialog,
+            componentProps: {
+                pw: savedPassword || '',  
+                rememberPassword: true
+            }
         });
-    }
+        modal.present();
+
+        const { data } = await modal.onWillDismiss();
+        resolve(data);
+    });
+}
 
     async ngOnInit() {
         let id = this.route.snapshot.queryParams.id;
@@ -464,6 +487,7 @@ onPaste(event: ClipboardEvent) {
                 this.cdr.detectChanges();
             } else if (typeof data == 'string' && data?.startsWith('pwWrong')) {
                 console.log('[REMOTE] ⚠️ Password incorrect');
+                this.pendingPassword = null;
                 const alert = await this.alertCtrl.create({
                     header: 'Password not correct',
                     buttons: ['OK'],
@@ -483,15 +507,23 @@ onPaste(event: ClipboardEvent) {
     }
 
     async askForPw() {
-        const pw: string = await this.pwPrompt();
-        if (pw) {
-            this.socketService.sendMessage(`pwAnswer:${pw}`);
-        } else {
-            this.socketService.sendMessage('decline');
-            this.close();
-        }
-        this.cdr.detectChanges();
+    const result = await this.pwPrompt(this.route.snapshot.queryParams.id);
+    
+    if (result?.password) {
+        // Store for later if connection succeeds
+        this.pendingPassword = {
+            password: result.password,
+            shouldRemember: result.rememberPassword,
+            id: this.route.snapshot.queryParams.id
+        };
+        
+        this.socketService.sendMessage(`pwAnswer:${result.password}`);
+    } else {
+        this.socketService.sendMessage('decline');
+        this.close();
     }
+    this.cdr.detectChanges();
+}
 
 initPeer(id) {
     console.log('[REMOTE] 🌐 Creating peer connection...');
@@ -597,6 +629,15 @@ initPeer(id) {
     this.peer2.on('connect', () => {
         console.log('[REMOTE] ✅ Peer connection established!');
         this.connected = true;
+
+          if (this.pendingPassword?.shouldRemember) {
+        this.addressBookService.savePassword(
+            this.pendingPassword.id,
+            this.pendingPassword.password
+        );
+        console.log('[REMOTE] 💾 Password saved for future connections');
+    }
+    this.pendingPassword = null; 
         this.cdr.detectChanges();
     });
 

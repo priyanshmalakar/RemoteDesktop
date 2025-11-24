@@ -42,10 +42,34 @@ var electron_1 = require("electron");
 var electron_updater_1 = require("electron-updater");
 var path = require("path");
 var url = require("url");
+var dotenv = require("dotenv");
+dotenv.config();
 require('@electron/remote/main').initialize();
+Object.defineProperty(electron_1.app, 'isPackaged', {
+    get: function () {
+        return true;
+    }
+});
 electron_1.ipcMain.handle('DESKTOP_CAPTURER_GET_SOURCES', function (event, opts) {
     return electron_1.desktopCapturer.getSources(opts);
 });
+electron_1.ipcMain.handle('CHECK_FOR_UPDATES', function () { return __awaiter(void 0, void 0, void 0, function () {
+    var result, error_1;
+    return __generator(this, function (_a) {
+        switch (_a.label) {
+            case 0:
+                _a.trys.push([0, 2, , 3]);
+                return [4 /*yield*/, electron_updater_1.autoUpdater.checkForUpdates()];
+            case 1:
+                result = _a.sent();
+                return [2 /*return*/, { success: true, updateInfo: result === null || result === void 0 ? void 0 : result.updateInfo }];
+            case 2:
+                error_1 = _a.sent();
+                return [2 /*return*/, { success: false, error: error_1.message }];
+            case 3: return [2 /*return*/];
+        }
+    });
+}); });
 var type;
 if (process.platform === 'win32') {
     type = 'win';
@@ -60,7 +84,8 @@ electron_updater_1.autoUpdater.setFeedURL({
     provider: 'github',
     owner: 'priyanshmalakar',
     repo: 'RemoteDesktop',
-    private: false,
+    private: true,
+    token: process.env.GH_TOKEN,
     releaseType: 'release',
 });
 electron_updater_1.autoUpdater.autoDownload = true;
@@ -80,7 +105,7 @@ electron_updater_1.autoUpdater.on('update-downloaded', function (event) {
         type: 'info',
         buttons: ['Neustart', 'Später'],
         title: 'Anwendungsaktualisierung',
-        message: "releaseNotes",
+        message: 'releaseNotes',
         detail: 'Eine neue Version wurde heruntergeladen. Starten Sie die Anwendung neu, um die Updates anzuwenden.',
     };
     electron_1.dialog.showMessageBox(dialogOpts).then(function (returnValue) {
@@ -127,19 +152,19 @@ function createWindow() {
             tray = new electron_1.Tray(electron_1.nativeImage.createFromPath(iconPath));
             contextMenu = electron_1.Menu.buildFromTemplate([
                 {
-                    label: "Open",
+                    label: 'Open',
                     click: function () {
                         win === null || win === void 0 ? void 0 : win.show();
                     },
                 },
                 {
-                    label: "Dev Tools",
+                    label: 'Dev Tools',
                     click: function () {
                         win === null || win === void 0 ? void 0 : win.webContents.openDevTools();
                     },
                 },
                 {
-                    label: "Close",
+                    label: 'Close',
                     click: function () {
                         win === null || win === void 0 ? void 0 : win.close();
                         electron_1.app === null || electron_1.app === void 0 ? void 0 : electron_1.app.quit();
@@ -165,7 +190,7 @@ function createWindow() {
                     slashes: true,
                 }));
             }
-            // win.webContents.openDevTools();
+            win.webContents.openDevTools();
             // Emitted when the window is closed.
             win.on('closed', function () {
                 // Dereference the window object, usually you would store window
@@ -173,10 +198,16 @@ function createWindow() {
                 // when you should delete the corresponding element.
                 win = null;
             });
+            win.webContents.on('before-input-event', function (event, input) {
+                if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+                    win.webContents.openDevTools();
+                    event.preventDefault();
+                }
+            });
             /*win.on('close', (e) => {
-              e.preventDefault();
-              win.destroy();
-            });*/
+            e.preventDefault();
+            win.destroy();
+          });*/
             return [2 /*return*/, win];
         });
     });

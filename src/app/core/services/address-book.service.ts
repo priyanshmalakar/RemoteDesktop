@@ -45,4 +45,24 @@ export class AddressBookService {
   }
 }
 
+async savePassword(id: string, password: string) {
+    const item = this.addressBook.find(adItem => adItem.id === id);
+    if (item) {
+        item.password = password;  
+        await this.save();
+    } else {
+      
+        await this.add({ id, password, name: `Device ${id}` });
+    }
+}
+
+async getPassword(id: string): Promise<string | null> {
+
+    if (!this.addressBook || this.addressBook.length === 0) {
+        await this.load();
+    }
+    const item = this.addressBook.find(adItem => adItem.id === id);
+    return item?.password || null;
+}
+
 }
