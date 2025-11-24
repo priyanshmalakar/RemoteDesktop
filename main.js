@@ -45,11 +45,6 @@ var url = require("url");
 var dotenv = require("dotenv");
 dotenv.config();
 require('@electron/remote/main').initialize();
-Object.defineProperty(electron_1.app, 'isPackaged', {
-    get: function () {
-        return true;
-    }
-});
 electron_1.ipcMain.handle('DESKTOP_CAPTURER_GET_SOURCES', function (event, opts) {
     return electron_1.desktopCapturer.getSources(opts);
 });
