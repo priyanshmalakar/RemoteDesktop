@@ -42,8 +42,10 @@ var electron_1 = require("electron");
 var electron_updater_1 = require("electron-updater");
 var path = require("path");
 var url = require("url");
-var dotenv = require("dotenv");
-dotenv.config();
+var isDev = process.env.NODE_ENV !== 'production';
+if (isDev) {
+    require('dotenv').config();
+}
 require('@electron/remote/main').initialize();
 electron_1.ipcMain.handle('DESKTOP_CAPTURER_GET_SOURCES', function (event, opts) {
     return electron_1.desktopCapturer.getSources(opts);
@@ -79,8 +81,8 @@ electron_updater_1.autoUpdater.setFeedURL({
     provider: 'github',
     owner: 'priyanshmalakar',
     repo: 'RemoteDesktop',
-    private: true,
-    token: process.env.GH_TOKEN,
+    private: false,
+    //  token: isDev ? process.env.GH_TOKEN : '',
     releaseType: 'release',
 });
 electron_updater_1.autoUpdater.autoDownload = true;

@@ -582,8 +582,6 @@
 
 
 
-/* eslint-disable @typescript-eslint/await-thenable */
-/* eslint-disable @typescript-eslint/no-inferrable-types */
 import { Injectable } from '@angular/core';
 import { AlertController, LoadingController } from '@ionic/angular';
 import { Subscription } from 'rxjs';
@@ -728,8 +726,8 @@ export class ConnectService {
             const win = this.electronService.window;
             try { win.minimize(); } catch {}
 
-            // Show chat window for this side (both sides call this on successful connect)
-            this.createChatUI();
+            // Show chat windows for both roles on this side (host+user panes)
+            this.createDualChatUI();
 
             setTimeout(async () => {
                 await this.startLocalCamera();
@@ -787,11 +785,17 @@ export class ConnectService {
                         return;
                     }
 
-                    // Chat message handling
+                    // Chat message handling (new: support chat-host- and chat-user- prefixes)
                     const text = new TextDecoder('utf-8').decode(data);
-                    if (text.startsWith("chat-")) {
-                        const message = text.replace("chat-", "");
-                        this.addChatMessage("Remote", message);
+                    if (text.startsWith("chat-host-")) {
+                        const message = text.replace("chat-host-", "");
+                        // show in host pane as remote-host message
+                        this.addChatMessage("Remote (Host)", message, "host");
+                        return;
+                    } else if (text.startsWith("chat-user-")) {
+                        const message = text.replace("chat-user-", "");
+                        // show in user pane as remote-user message
+                        this.addChatMessage("Remote (User)", message, "user");
                         return;
                     }
 
@@ -1019,133 +1023,203 @@ export class ConnectService {
     }
 
     // ========================= CHAT FUNCTIONS =============================
-    createChatUI() {
-        // If chat already exists, do nothing
-        if (document.getElementById("chatBox")) return;
+    // Creates both Host and User chat panes on screen (left = Host, right = User)
+    createDualChatUI() {
+        // create host pane (left)
+        if (!document.getElementById('hostChatBox')) {
+            const hostBox = document.createElement('div');
+            hostBox.id = 'hostChatBox';
+            hostBox.style.position = 'fixed';
+            hostBox.style.left = '20px';
+            hostBox.style.bottom = '20px';
+            hostBox.style.width = '320px';
+            hostBox.style.height = '360px';
+            hostBox.style.background = '#111827'; // dark
+            hostBox.style.border = '2px solid #374151';
+            hostBox.style.borderRadius = '10px';
+            hostBox.style.zIndex = '99999';
+            hostBox.style.display = 'flex';
+            hostBox.style.flexDirection = 'column';
+            hostBox.style.color = 'white';
+            hostBox.style.fontFamily = 'sans-serif';
+            hostBox.style.boxShadow = '0 6px 18px rgba(0,0,0,0.4)';
 
-        const box = document.createElement("div");
-        box.id = "chatBox";
-        box.style.position = "fixed";
-        box.style.bottom = "10px";
-        box.style.right = "200px";
-        box.style.width = "300px";
-        box.style.height = "360px";
-        box.style.background = "#1e1e1e";
-        box.style.border = "2px solid white";
-        box.style.borderRadius = "10px";
-        box.style.zIndex = "9999";
-        box.style.display = "flex";
-        box.style.flexDirection = "column";
-        box.style.color = "white";
-        box.style.fontFamily = "sans-serif";
-        box.style.boxShadow = "0 6px 18px rgba(0,0,0,0.4)";
-
-        box.innerHTML = `
-            <div id="chatHeader" style="padding:8px; background:#333; border-bottom:2px solid #444; display:flex; align-items:center; justify-content:space-between;">
-                <div style="font-weight:bold;">Live Chat</div>
-                <div style="display:flex; gap:6px; align-items:center;">
-                    <button id="chatMinBtn" title="Minimize" style="border:none; background:transparent; color:white; cursor:pointer; font-weight:bold;">_</button>
-                    <button id="chatMaxBtn" title="Maximize" style="border:none; background:transparent; color:white; cursor:pointer; font-weight:bold; display:none;">☐</button>
-                    <button id="chatCloseBtn" title="Close" style="border:none; background:transparent; color:white; cursor:pointer; font-weight:bold;">✕</button>
+            hostBox.innerHTML = `
+                <div id="hostChatHeader" style="padding:8px; background:#0f172a; border-bottom:2px solid #111827; display:flex; align-items:center; justify-content:space-between;">
+                    <div style="font-weight:bold;">Host Chat</div>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <button id="hostChatMinBtn" title="Minimize" style="border:none; background:transparent; color:white; cursor:pointer; font-weight:bold;">_</button>
+                        <button id="hostChatCloseBtn" title="Close" style="border:none; background:transparent; color:white; cursor:pointer; font-weight:bold;">✕</button>
+                    </div>
                 </div>
-            </div>
-            <div id="chatMessages" style="flex:1; padding:8px; overflow-y:auto; font-size:14px; background:transparent;"></div>
-            <div id="chatInputWrapper" style="padding:6px; display:flex; gap:4px; border-top:1px solid #333;">
-                <input id="chatInput" placeholder="Type message..." 
-                    style="flex:1; padding:8px; border-radius:6px; border:1px solid #444; outline:none; background:#2b2b2b; color:white;"/>
-                <button id="chatSend" 
-                    style="padding:8px 10px; background:#007bff; color:white; border:none; border-radius:6px; cursor:pointer;">
-                    Send
-                </button>
-            </div>
-        `;
+                <div id="hostChatMessages" style="flex:1; padding:8px; overflow-y:auto; font-size:14px; background:transparent;"></div>
+                <div id="hostChatInputWrapper" style="padding:6px; display:flex; gap:4px; border-top:1px solid #111827;">
+                    <input id="hostChatInput" placeholder="Message as Host..." 
+                        style="flex:1; padding:8px; border-radius:6px; border:1px solid #374151; outline:none; background:#0b1220; color:white;"/>
+                    <button id="hostChatSend" 
+                        style="padding:8px 10px; background:#06b6d4; color:black; border:none; border-radius:6px; cursor:pointer;">
+                        Send
+                    </button>
+                </div>
+            `;
 
-        document.body.appendChild(box);
+            document.body.appendChild(hostBox);
 
-        const sendBtn = document.getElementById("chatSend");
-        const input = document.getElementById("chatInput") as HTMLInputElement;
-        const minBtn = document.getElementById("chatMinBtn");
-        const maxBtn = document.getElementById("chatMaxBtn");
-        const closeBtn = document.getElementById("chatCloseBtn");
-        const messages = document.getElementById("chatMessages");
-        const inputWrapper = document.getElementById("chatInputWrapper");
+            const hostSend = document.getElementById('hostChatSend');
+            const hostInput = document.getElementById('hostChatInput') as HTMLInputElement;
+            const hostMin = document.getElementById('hostChatMinBtn');
+            const hostClose = document.getElementById('hostChatCloseBtn');
+            const hostMessages = document.getElementById('hostChatMessages')!;
+            const hostInputWrapper = document.getElementById('hostChatInputWrapper')!;
 
-        // Send function
-        const doSend = () => {
-            if (!input.value.trim()) return;
-            const text = input.value.trim();
-            try {
-                if (this.peer1 && this.peer1.connected) {
-                    this.peer1.send("chat-" + text);
-                } else {
-                    // still show locally even if not connected
-                    console.warn('[CHAT] peer not connected, showing locally only');
+            const doHostSend = () => {
+                if (!hostInput.value.trim()) return;
+                const text = hostInput.value.trim();
+                try {
+                    if (this.peer1 && this.peer1.connected) {
+                        this.peer1.send('chat-host-' + text);
+                    } else {
+                        console.warn('[CHAT] peer not connected (host)');
+                    }
+                } catch (e) {
+                    console.error('[CHAT] send error (host)', e);
                 }
-            } catch (e) {
-                console.error('[CHAT] send error', e);
-            }
-            this.addChatMessage("You", text);
-            input.value = "";
-            input.focus();
-        };
+                this.addChatMessage('You (Host)', text, 'host');
+                hostInput.value = '';
+                hostInput.focus();
+            };
 
-        sendBtn?.addEventListener("click", () => doSend());
+            hostSend?.addEventListener('click', () => doHostSend());
+            hostInput.addEventListener('keydown', (ev: KeyboardEvent) => {
+                if (ev.key === 'Enter' && !ev.shiftKey) {
+                    ev.preventDefault();
+                    doHostSend();
+                }
+            });
 
-        // Enter to send, Shift+Enter for newline
-        input.addEventListener("keydown", (ev: KeyboardEvent) => {
-            if (ev.key === "Enter" && !ev.shiftKey) {
-                ev.preventDefault();
-                doSend();
-            }
-        });
+            hostMin?.addEventListener('click', () => {
+                (hostMessages as HTMLElement).style.display = 'none';
+                (hostInputWrapper as HTMLElement).style.display = 'none';
+                (document.getElementById('hostChatBox') as HTMLElement).style.height = '44px';
+            });
+            hostClose?.addEventListener('click', () => {
+                const el = document.getElementById('hostChatBox'); if (el) el.remove();
+            });
 
-        // Minimize / Maximize behavior
-        const toggleMinimize = (minimize: boolean) => {
-            if (minimize) {
-                // minimized: show only header
-                (messages as HTMLElement).style.display = "none";
-                (inputWrapper as HTMLElement).style.display = "none";
-                box.style.height = "44px";
-                minBtn!.style.display = "none";
-                maxBtn!.style.display = "inline-block";
-            } else {
-                (messages as HTMLElement).style.display = "block";
-                (inputWrapper as HTMLElement).style.display = "flex";
-                box.style.height = "360px";
-                minBtn!.style.display = "inline-block";
-                maxBtn!.style.display = "none";
-            }
-        };
+            // draggable (simple)
+            this.makeDraggable('hostChatBox', 'hostChatHeader');
+        }
 
-        minBtn?.addEventListener("click", () => toggleMinimize(true));
-        maxBtn?.addEventListener("click", () => toggleMinimize(false));
-        closeBtn?.addEventListener("click", () => this.removeChatWindow());
+        // create user pane (right)
+        if (!document.getElementById('userChatBox')) {
+            const userBox = document.createElement('div');
+            userBox.id = 'userChatBox';
+            userBox.style.position = 'fixed';
+            userBox.style.right = '20px';
+            userBox.style.bottom = '20px';
+            userBox.style.width = '320px';
+            userBox.style.height = '360px';
+            userBox.style.background = '#0b1220'; // dark slightly different
+            userBox.style.border = '2px solid #374151';
+            userBox.style.borderRadius = '10px';
+            userBox.style.zIndex = '99999';
+            userBox.style.display = 'flex';
+            userBox.style.flexDirection = 'column';
+            userBox.style.color = 'white';
+            userBox.style.fontFamily = 'sans-serif';
+            userBox.style.boxShadow = '0 6px 18px rgba(0,0,0,0.4)';
 
-        // focus input on creation
-        setTimeout(() => {
-            try { input.focus(); } catch {}
-        }, 50);
+            userBox.innerHTML = `
+                <div id="userChatHeader" style="padding:8px; background:#021124; border-bottom:2px solid #011323; display:flex; align-items:center; justify-content:space-between;">
+                    <div style="font-weight:bold;">User Chat</div>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <button id="userChatMinBtn" title="Minimize" style="border:none; background:transparent; color:white; cursor:pointer; font-weight:bold;">_</button>
+                        <button id="userChatCloseBtn" title="Close" style="border:none; background:transparent; color:white; cursor:pointer; font-weight:bold;">✕</button>
+                    </div>
+                </div>
+                <div id="userChatMessages" style="flex:1; padding:8px; overflow-y:auto; font-size:14px; background:transparent;"></div>
+                <div id="userChatInputWrapper" style="padding:6px; display:flex; gap:4px; border-top:1px solid #011323;">
+                    <input id="userChatInput" placeholder="Message as User..." 
+                        style="flex:1; padding:8px; border-radius:6px; border:1px solid #374151; outline:none; background:#071427; color:white;"/>
+                    <button id="userChatSend" 
+                        style="padding:8px 10px; background:#34d399; color:black; border:none; border-radius:6px; cursor:pointer;">
+                        Send
+                    </button>
+                </div>
+            `;
 
-        // make draggable from header (simple)
-        const header = document.getElementById("chatHeader")!;
+            document.body.appendChild(userBox);
+
+            const userSend = document.getElementById('userChatSend');
+            const userInput = document.getElementById('userChatInput') as HTMLInputElement;
+            const userMin = document.getElementById('userChatMinBtn');
+            const userClose = document.getElementById('userChatCloseBtn');
+            const userMessages = document.getElementById('userChatMessages')!;
+            const userInputWrapper = document.getElementById('userChatInputWrapper')!;
+
+            const doUserSend = () => {
+                if (!userInput.value.trim()) return;
+                const text = userInput.value.trim();
+                try {
+                    if (this.peer1 && this.peer1.connected) {
+                        this.peer1.send('chat-user-' + text);
+                    } else {
+                        console.warn('[CHAT] peer not connected (user)');
+                    }
+                } catch (e) {
+                    console.error('[CHAT] send error (user)', e);
+                }
+                this.addChatMessage('You (User)', text, 'user');
+                userInput.value = '';
+                userInput.focus();
+            };
+
+            userSend?.addEventListener('click', () => doUserSend());
+            userInput.addEventListener('keydown', (ev: KeyboardEvent) => {
+                if (ev.key === 'Enter' && !ev.shiftKey) {
+                    ev.preventDefault();
+                    doUserSend();
+                }
+            });
+
+            userMin?.addEventListener('click', () => {
+                (userMessages as HTMLElement).style.display = 'none';
+                (userInputWrapper as HTMLElement).style.display = 'none';
+                (document.getElementById('userChatBox') as HTMLElement).style.height = '44px';
+            });
+            userClose?.addEventListener('click', () => {
+                const el = document.getElementById('userChatBox'); if (el) el.remove();
+            });
+
+            // draggable (simple)
+            this.makeDraggable('userChatBox', 'userChatHeader');
+        }
+    }
+
+    // Simple helper to make chat boxes draggable by header
+    private makeDraggable(boxId: string, headerId: string) {
+        const box = document.getElementById(boxId);
+        const header = document.getElementById(headerId);
+        if (!box || !header) return;
+
         let dragging = false;
         let offsetX = 0;
         let offsetY = 0;
 
-        header.addEventListener("mousedown", (e: MouseEvent) => {
+        header.addEventListener('mousedown', (e: MouseEvent) => {
             dragging = true;
             const rect = box.getBoundingClientRect();
             offsetX = e.clientX - rect.left;
             offsetY = e.clientY - rect.top;
-            header.style.cursor = "grabbing";
+            (header as HTMLElement).style.cursor = 'grabbing';
         });
 
-        document.addEventListener("mouseup", () => {
+        document.addEventListener('mouseup', () => {
             dragging = false;
-            header.style.cursor = "default";
+            try { (header as HTMLElement).style.cursor = 'default'; } catch {}
         });
 
-        document.addEventListener("mousemove", (e: MouseEvent) => {
+        document.addEventListener('mousemove', (e: MouseEvent) => {
             if (!dragging) return;
             let left = e.clientX - offsetX;
             let top = e.clientY - offsetY;
@@ -1155,24 +1229,27 @@ export class ConnectService {
             left = Math.max(6, Math.min(left, w - box.offsetWidth - 6));
             top = Math.max(6, Math.min(top, h - box.offsetHeight - 6));
 
-            box.style.right = 'auto';
-            box.style.left = left + 'px';
-            box.style.top = top + 'px';
-            box.style.bottom = 'auto';
+            (box as HTMLElement).style.right = 'auto';
+            (box as HTMLElement).style.left = left + 'px';
+            (box as HTMLElement).style.top = top + 'px';
+            (box as HTMLElement).style.bottom = 'auto';
         });
     }
 
-    addChatMessage(sender: string, msg: string) {
-        const container = document.getElementById("chatMessages");
+    // Add message to correct pane
+    addChatMessage(sender: string, msg: string, role: 'host' | 'user') {
+        const containerId = role === 'host' ? 'hostChatMessages' : 'userChatMessages';
+        const container = document.getElementById(containerId);
         if (!container) return;
-        const div = document.createElement("div");
-        div.style.margin = "6px 0";
-        div.style.wordBreak = "break-word";
+        const div = document.createElement('div');
+        div.style.margin = '6px 0';
+        div.style.wordBreak = 'break-word';
 
-        if (sender === "You") {
-            div.innerHTML = `<div style="text-align:right;"><span style="display:inline-block; padding:6px 10px; background:#007bff; color:white; border-radius:10px; max-width:80%;">${this.escapeHtml(msg)}</span></div>`;
+        // style based on sender (You vs Remote)
+        if (sender.startsWith('You')) {
+            div.innerHTML = `<div style="text-align:right;"><span style="display:inline-block; padding:6px 10px; background:#06b6d4; color:black; border-radius:10px; max-width:80%;">${this.escapeHtml(msg)}</span></div>`;
         } else {
-            div.innerHTML = `<div style="text-align:left;"><span style="display:inline-block; padding:6px 10px; background:#2b2b2b; color:white; border-radius:10px; max-width:80%;">${this.escapeHtml(msg)}</span></div>`;
+            div.innerHTML = `<div style="text-align:left;"><span style="display:inline-block; padding:6px 10px; background:#222; color:white; border-radius:10px; max-width:80%;">${this.escapeHtml(msg)}</span><div style="font-size:11px;color:#9ca3af;margin-top:4px;">${this.escapeHtml(sender)}</div></div>`;
         }
 
         container.appendChild(div);
@@ -1189,14 +1266,9 @@ export class ConnectService {
     }
 
     removeChatWindow() {
-        const box = document.getElementById("chatBox");
-        if (box) box.remove();
+        const hostBox = document.getElementById('hostChatBox');
+        const userBox = document.getElementById('userChatBox');
+        if (hostBox) hostBox.remove();
+        if (userBox) userBox.remove();
     }
 }
-
-
-
-
-
-
-
