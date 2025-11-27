@@ -133,7 +133,6 @@ isDraggingHost = false;
 isDraggingLocal = false;
 dragOffset = { x: 0, y: 0 };
 
-
     options: AnimationOptions | any = {
         path: '/assets/animations/lf30_editor_PsHnfk.json',
         loop: true,
@@ -146,10 +145,7 @@ dragOffset = { x: 0, y: 0 };
     private boundMouseUpListener: any;
     private boundMouseDownListener: any;
     private pendingPassword: { password: string, shouldRemember: boolean, id: string } | null = null;
-    private socketListenersActive = false;
-private peerCreated = false;
-private messageSubscription: any;
-private clipboardWatcher: any = null;
+    
 
     @HostListener('document:dragover', ['$event'])
     onDragOver(event) {
@@ -438,120 +434,77 @@ onPaste(event: ClipboardEvent) {
     }
 
     stopVideoCall() {
-    console.log('[REMOTE] 🛑 Stopping local video...');
-    if (this.localStream) {
-        this.localStream.getTracks().forEach(track => {
-            track.stop();
-            console.log('[REMOTE] Stopped track:', track.kind);
-        });
-        this.localStream = null;
-    }
-    
-    const localVideo = this.localVideoRef?.nativeElement;
-    if (localVideo) {
-        localVideo.srcObject = null;
-    }
-}
-
-async init(id) {
-    console.log('[REMOTE] 🎯 Initializing with ID:', id);
-    this.appService.sideMenu = false;
-
-    if (this.electronService.isElectron) {
-        this.spf = new SimplePeerFiles();
+        console.log('[REMOTE] 🛑 Stopping local video...');
+        if (this.localStream) {
+            this.localStream.getTracks().forEach(track => track.stop());
+            this.localStream = null;
+        }
     }
 
-    // Start local camera FIRST
-    await this.startVideoCall();
+    async init(id) {
+        console.log('[REMOTE] 🎯 Initializing with ID:', id);
+        this.appService.sideMenu = false;
 
-    // ⭐ CRITICAL: Properly clean up old socket listeners
-    if (this.socketService?.socket) {
-        console.log('[REMOTE] 🧹 Cleaning up old socket listeners...');
-        this.socketService.socket.off('connect');
-        this.socketService.socket.off('message');
-        this.socketService.socket.removeAllListeners('connect');
-        this.socketService.socket.removeAllListeners('message');
-    }
+        if (this.electronService.isElectron) {
+            this.spf = new SimplePeerFiles();
+        }
 
-    // ⭐ CRITICAL: Only init socket if not already initialized
-    if (!this.socketService.socket || !this.socketService.socket.connected) {
-        console.log('[REMOTE] 🔌 Initializing socket...');
+        // Start local camera FIRST
+        await this.startVideoCall();
+
         this.socketService.init();
-    } else {
-        console.log('[REMOTE] ✅ Socket already connected');
-    }
 
-    // Wait for socket connection with timeout
-    await new Promise((resolve, reject) => {
-        if (this.socketService.socket?.connected) {
-            resolve(true);
-        } else {
-            const timeout = setTimeout(() => {
-                reject(new Error('Socket connection timeout'));
-            }, 10000);
+        // Wait for socket connection
+        this.socketService.socket.on('connect', () => {
+            console.log('[REMOTE] ✅ Socket connected, joining room:', id);
+            this.socketService.joinRoom(id);
 
-            this.socketService.socket.once('connect', () => {
-                clearTimeout(timeout);
-                resolve(true);
-            });
-        }
-    }).catch(err => {
-        console.error('[REMOTE] ❌ Socket connection failed:', err);
-    });
+            setTimeout(() => {
+                console.log('[REMOTE] 👋 Sending "hi" to host');
+                this.socketService.sendMessage('hi');
+            }, 500);
+        });
 
-    console.log('[REMOTE] ✅ Socket connected, joining room:', id);
-    this.socketService.joinRoom(id);
+        this.socketService.onNewMessage().subscribe(async (data: any) => {
+            console.log(
+                '[REMOTE] 📨 Message received:',
+                typeof data === 'string' ? data.substring(0, 30) : 'signal'
+            );
 
-    setTimeout(() => {
-        console.log('[REMOTE] 👋 Sending "hi" to host');
-        this.socketService.sendMessage('hi');
-    }, 500);
-
-   if (this.messageSubscription) {
-    console.log('[REMOTE] 🧹 Cleaning old message subscription');
-    this.messageSubscription.unsubscribe();
-    this.messageSubscription = null;
-}
-
-// ⭐ CRITICAL: Create fresh message subscription
-this.messageSubscription = this.socketService.onNewMessage().subscribe(async (data: any) => {
-        console.log('[REMOTE] 📨 Message received');
-
-        if (typeof data == 'string' && data?.startsWith('screenSize')) {
-            const size = data.split(',');
-            this.hostScreenSize = {
-                height: +size[2],
-                width: +size[1],
-            };
-            console.log('[REMOTE] 📐 Host screen size:', this.hostScreenSize);
-        } else if (typeof data == 'string' && data?.startsWith('pwRequest')) {
-            console.log('[REMOTE] 🔒 Password requested');
-            this.askForPw();
-        } else if (typeof data == 'string' && data?.startsWith('decline')) {
-            console.log('[REMOTE] ❌ Connection declined');
-            this.close();
-            this.cdr.detectChanges();
-        } else if (typeof data == 'string' && data?.startsWith('pwWrong')) {
-            console.log('[REMOTE] ⚠️ Password incorrect');
-            this.pendingPassword = null;
-            const alert = await this.alertCtrl.create({
-                header: 'Password not correct',
-                buttons: ['OK'],
-            });
-            await alert.present();
-            this.askForPw();
-            this.cdr.detectChanges();
-        } else {
-            console.log('[REMOTE] 🔄 Received WebRTC signal');
-            if (this.peer2) {
-                this.peer2.signal(data);
+            if (typeof data == 'string' && data?.startsWith('screenSize')) {
+                const size = data.split(',');
+                this.hostScreenSize = {
+                    height: +size[2],
+                    width: +size[1],
+                };
+                console.log('[REMOTE] 📐 Host screen size:', this.hostScreenSize);
+            } else if (typeof data == 'string' && data?.startsWith('pwRequest')) {
+                console.log('[REMOTE] 🔒 Password requested');
+                this.askForPw();
+            } else if (typeof data == 'string' && data?.startsWith('decline')) {
+                console.log('[REMOTE] ❌ Connection declined');
+                this.close();
+                this.cdr.detectChanges();
+            } else if (typeof data == 'string' && data?.startsWith('pwWrong')) {
+                console.log('[REMOTE] ⚠️ Password incorrect');
+                this.pendingPassword = null;
+                const alert = await this.alertCtrl.create({
+                    header: 'Password not correct',
+                    buttons: ['OK'],
+                });
+                await alert.present();
+                this.askForPw();
+                this.cdr.detectChanges();
+            } else {
+                console.log('[REMOTE] 🔄 Received WebRTC signal');
+                if (this.peer2) {
+                    this.peer2.signal(data);
+                }
             }
-        }
-    });
+        });
 
-    this.socketListenersActive = true;
-    this.initPeer(id);
-}
+        this.initPeer(id);
+    }
 
     async askForPw() {
     const result = await this.pwPrompt(this.route.snapshot.queryParams.id);
@@ -571,21 +524,11 @@ this.messageSubscription = this.socketService.onNewMessage().subscribe(async (da
     }
     this.cdr.detectChanges();
 }
+
 initPeer(id) {
     console.log('[REMOTE] 🌐 Creating peer connection...');
 
-    // ⭐ CRITICAL: Destroy old peer if exists
-    if (this.peer2) {
-        console.log('[REMOTE] 🧹 Destroying old peer before creating new one...');
-        try {
-            this.peer2.destroy();
-            this.peer2 = null;
-        } catch (err) {
-            console.error('[REMOTE] Old peer destroy error:', err);
-        }
-    }
-
-    // Track storage
+    // Track storage - will receive tracks one by one
     let receivedTracks = {
         screenVideo: null,
         screenAudio: null,
@@ -594,7 +537,7 @@ initPeer(id) {
     };
     let trackCount = 0;
 
-    // Create NEW peer
+    // Create peer WITHOUT initial stream
     this.peer2 = new SimplePeer({
         initiator: false,
         config: {
@@ -623,9 +566,6 @@ initPeer(id) {
             ],
         },
     });
-
-     this.peerCreated = true;
-    console.log('[REMOTE] ✅ New peer created');
 
     console.log('[REMOTE] ✅ Peer created, now adding LOCAL tracks FIRST...');
 
@@ -790,17 +730,7 @@ startClipboardMonitoring() {
         console.log('[REMOTE] 📋 Starting clipboard monitoring...');
         const clipboard = this.electronService.clipboard;
         
-        // ⭐ Stop old watcher if exists
-        if (this.clipboardWatcher) {
-            console.log('[REMOTE] 🧹 Stopping old clipboard watcher');
-            try {
-                this.clipboardWatcher.stopWatching();
-            } catch (err) {
-                console.error('[REMOTE] Clipboard stop error:', err);
-            }
-        }
-        
-        this.clipboardWatcher = clipboard
+        clipboard
             .on('text-changed', () => {
                 if (this.peer2 && this.connected) {
                     const currentText = clipboard.readText();
@@ -810,15 +740,15 @@ startClipboardMonitoring() {
             })
             .on('image-changed', () => {
                 console.log('[REMOTE] 📋 Clipboard image changed (not implemented)');
-            });
-            
-        this.clipboardWatcher.startWatching();
+            })
+            .startWatching();
         
         console.log('[REMOTE] ✅ Clipboard monitoring active');
     } catch (err) {
         console.error('[REMOTE] ❌ Clipboard monitoring failed:', err);
     }
 }
+
 updateVideoDisplays(receivedTracks: any) {
     console.log('[REMOTE] 🔄 Updating video displays...', {
         hasScreen: !!receivedTracks.screenVideo,
@@ -928,56 +858,16 @@ updateVideoDisplays(receivedTracks: any) {
         console.log('[REMOTE] ⏳ Waiting for host camera track...');
     }
 }
-  close() {
-    console.log('[REMOTE] 🚪 Closing connection...');
-    if (this.clipboardWatcher) {
-    console.log('[REMOTE] 🛑 Stopping clipboard watcher');
-    try {
-        this.clipboardWatcher.stopWatching();
-        this.clipboardWatcher = null;
-    } catch (err) {
-        console.error('[REMOTE] Clipboard cleanup error:', err);
-    }
-}
-    this.connected = false;
-    this.removeEventListeners();
-    this.stopVideoCall();
-    
-    
-   // ⭐ Leave socket room
-if (this.route.snapshot.queryParams.id) {
-    console.log('[REMOTE] 🚪 Leaving room');
-    try {
-        this.socketService.leaveRoom(this.route.snapshot.queryParams.id);
-    } catch (err) {
-        console.error('[REMOTE] Leave room error:', err);
-    }
-}
-    if (this.peer2) {
+    close() {
+        this.connected = false;
+        this.removeEventListeners();
+        this.stopVideoCall();
         try {
-            this.peer2.destroy();
-            this.peer2 = null; 
-            this.peerCreated = false;
+            this.electronService.window.close();
         } catch (err) {
-            console.error('[REMOTE] Peer close error:', err);
+            console.warn('window.close failed', err);
         }
     }
-   
-    if (this.socketService?.socket) {
-        this.socketService.socket.removeAllListeners();
-        this.socketListenersActive = false;
-    }
-    if (this.messageSubscription) {
-    this.messageSubscription.unsubscribe();
-    this.messageSubscription = null;
-}
-    try {
-        this.electronService.window.close();
-    } catch (err) {
-        console.warn('[REMOTE] Window close failed', err);
-    }
-}
-
 
     calcVideoSize() {
         if (!this.video) {
@@ -990,58 +880,18 @@ if (this.route.snapshot.queryParams.id) {
         console.log('[REMOTE] 📐 Host screen size:', this.hostScreenSize);
     }
 
-  ngOnDestroy() {
-    console.log('[REMOTE] 🧹 Component destroying - full cleanup...');
-    if (this.clipboardWatcher) {
-    console.log('[REMOTE] 🛑 Stopping clipboard watcher');
-    try {
-        this.clipboardWatcher.stopWatching();
-        this.clipboardWatcher = null;
-    } catch (err) {
-        console.error('[REMOTE] Clipboard cleanup error:', err);
-    }
-}
-    this.appService.sideMenu = true;
-    this.removeEventListeners();
-    this.stopVideoCall();
-    
-   // ⭐ Leave socket room
-if (this.route.snapshot.queryParams.id) {
-    console.log('[REMOTE] 🚪 Leaving room');
-    try {
-        this.socketService.leaveRoom(this.route.snapshot.queryParams.id);
-    } catch (err) {
-        console.error('[REMOTE] Leave room error:', err);
-    }
-}
-    
-    if (this.peer2) {
+    ngOnDestroy() {
+        this.appService.sideMenu = true;
+        this.removeEventListeners();
+        this.stopVideoCall();
+        
         try {
-            this.peer2.destroy();
-            this.peer2 = null;
-            this.peerCreated = false;
-        } catch (err) {
-            console.error('[REMOTE] Peer destroy error:', err);
-        }
+            this.socketService?.destroy();
+        } catch (err) {}
+        try {
+            this.peer2?.destroy();
+        } catch (err) {}
     }
-    
-    if (this.socketService?.socket) {
-        this.socketService.socket.removeAllListeners('connect');
-        this.socketService.socket.removeAllListeners('message');
-        this.socketService.socket.removeAllListeners('newMessage');
-        this.socketListenersActive = false;
-    }
-    if (this.messageSubscription) {
-    this.messageSubscription.unsubscribe();
-    this.messageSubscription = null;
-}
-    
-    try {
-        this.socketService?.destroy();
-    } catch (err) {
-        console.error('[REMOTE] Socket destroy error:', err);
-    }
-}
 
     getFileProgress(fileProgress) {
         return fileProgress ? fileProgress.toFixed() : '';
