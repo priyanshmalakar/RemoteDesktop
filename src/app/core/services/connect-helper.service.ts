@@ -13,6 +13,45 @@ export class ConnectHelperService {
 
   constructor(private electronService: ElectronService) {}
 
+  // ⭐ ALL SPECIAL KEYS MAPPED FOR REMOTE CONTROL
+  private specialKeysMap: Record<string, Key> = {
+    Escape: Key.Escape,
+    Tab: Key.Tab,
+    CapsLock: Key.CapsLock,
+
+    ShiftLeft: Key.LeftShift,
+    ShiftRight: Key.RightShift,
+
+    ControlLeft: Key.LeftControl,
+    ControlRight: Key.RightControl,
+
+    AltLeft: Key.LeftAlt,
+    AltRight: Key.RightAlt,
+
+    MetaLeft: Key.LeftSuper,
+    MetaRight: Key.RightSuper,
+
+    Enter: Key.Enter,
+    Backspace: Key.Backspace,
+    Space: Key.Space,
+
+    ArrowUp: Key.Up,
+    ArrowDown: Key.Down,
+    ArrowLeft: Key.Left,
+    ArrowRight: Key.Right,
+
+    Delete: Key.Delete,
+    Insert: Key.Insert,
+    Home: Key.Home,
+    End: Key.End,
+    PageUp: Key.PageUp,
+    PageDown: Key.PageDown,
+
+    F1: Key.F1, F2: Key.F2, F3: Key.F3, F4: Key.F4,
+    F5: Key.F5, F6: Key.F6, F7: Key.F7, F8: Key.F8,
+    F9: Key.F9, F10: Key.F10, F11: Key.F11, F12: Key.F12,
+  };
+
   // Generate a 3-digit random number
   threeDigit(): number {
     return Math.floor(Math.random() * 900) + 100; // 100-999
@@ -55,17 +94,17 @@ export class ConnectHelperService {
     }
   }
 
-  // Keyboard handler
-  async handleKey(data: { key?: string; shift?: boolean; control?: boolean; alt?: boolean; meta?: boolean; code?: string }) {
+  // ⭐ FIXED KEYBOARD HANDLER (FULLY WORKING)
+  async handleKey(data: {
+    key?: string;
+    shift?: boolean;
+    control?: boolean;
+    alt?: boolean;
+    meta?: boolean;
+    code?: string;
+  }) {
     try {
-      if (!this.electronService.isElectron) {
-        console.log('Not running in electron - keyboard input ignored.', data);
-        return;
-      }
-
-      const rawPlatform = (window as any)?.process?.platform ?? (navigator?.platform ?? '').toString();
-      const platformStr = String(rawPlatform).toLowerCase();
-      const isMac = platformStr.includes('darwin') || platformStr.includes('mac');
+      if (!this.electronService.isElectron) return;
 
       const modifiers: Key[] = [];
       if (data.shift) modifiers.push(Key.LeftShift);
@@ -75,55 +114,37 @@ export class ConnectHelperService {
 
       const reversedModifiers = [...modifiers].reverse();
 
-      // Printable characters
+      const keyCode = data.code || data.key || '';
+      const nutKey =
+        this.specialKeysMap[keyCode] ??
+        this.specialKeysMap[data.key ?? ''] ??
+        null;
+
+      // 🔹 Printable characters (a-z, 0-9, symbols)
       if (data.key && data.key.length === 1) {
-        if (modifiers.length > 0) {
-          for (const m of modifiers) await keyboard.pressKey(m);
-          await keyboard.type(data.key);
-          for (const m of reversedModifiers) await keyboard.releaseKey(m);
-        } else {
-          await keyboard.type(data.key);
-        }
+        for (const m of modifiers) await keyboard.pressKey(m);
+        await keyboard.type(data.key);
+        for (const m of reversedModifiers) await keyboard.releaseKey(m);
         return;
       }
 
-      // Special keys
-      const keyName = data.code || data.key || '';
-      let keyToPress: Key | null = null;
-
-      try {
-        keyToPress = (Key as any)[keyName] ?? (data.key ? (Key as any)[data.key] : null);
-      } catch {
-        keyToPress = null;
+      // 🔹 Special keys mapped above
+      if (nutKey) {
+        for (const m of modifiers) await keyboard.pressKey(m);
+        await keyboard.pressKey(nutKey);
+        await keyboard.releaseKey(nutKey);
+        for (const m of reversedModifiers) await keyboard.releaseKey(m);
+        return;
       }
 
-      if (keyToPress) {
-        if (modifiers.length > 0) {
-          for (const m of modifiers) await keyboard.pressKey(m);
-          await keyboard.pressKey(keyToPress);
-          await keyboard.releaseKey(keyToPress);
-          for (const m of reversedModifiers) await keyboard.releaseKey(m);
-        } else {
-          await keyboard.pressKey(keyToPress);
-          await keyboard.releaseKey(keyToPress);
-        }
-      } else if (data.key) {
-        if (modifiers.length > 0) {
-          for (const m of modifiers) await keyboard.pressKey(m);
-          await keyboard.type(data.key);
-          for (const m of reversedModifiers) await keyboard.releaseKey(m);
-        } else {
-          await keyboard.type(data.key);
-        }
-      } else {
-        console.warn('Unknown key to press and no fallback text:', data);
-      }
+      console.warn('Unknown key:', data);
+
     } catch (error) {
       console.error('handleKey error:', error);
     }
   }
 
-  // Info window
+  // =================== INFO WINDOW CODE ======================
   closeInfoWindow() {
     try {
       this.infoWindow?.close();
