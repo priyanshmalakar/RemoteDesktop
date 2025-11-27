@@ -41,6 +41,9 @@ export class ConnectService {
     fileLoading = false;
     cameraStream: MediaStream | null = null;
     screenStream: MediaStream | null = null;
+    private messageSubscription: Subscription;
+    private disconnectSubscription: Subscription;
+    private clipboardWatcher: any = null;
 
     constructor(
         private electronService: ElectronService,
@@ -52,21 +55,33 @@ export class ConnectService {
     ) {}
 
     clipboardListener() {
-        const clipboard = this.electronService.clipboard;
-        clipboard
-            .on('text-changed', () => {
-                if (this.peer1 && this.connected) {
-                    const currentText = clipboard.readText();
-                    console.log('[CONNECT] 📋 Clipboard text changed');
-                    this.peer1.send('clipboard-' + currentText);
-                }
-            })
-            .on('image-changed', () => {
-                const currentImage = clipboard.readImage();
-                console.log('[CONNECT] 📋 Clipboard image changed');
-            })
-            .startWatching();
+    const clipboard = this.electronService.clipboard;
+    
+    // ⭐ Stop old watcher if exists
+    if (this.clipboardWatcher) {
+        console.log('[CONNECT] 🧹 Stopping old clipboard watcher');
+        try {
+            this.clipboardWatcher.stopWatching();
+        } catch (err) {
+            console.error('[CONNECT] Clipboard stop error:', err);
+        }
     }
+    
+    this.clipboardWatcher = clipboard
+        .on('text-changed', () => {
+            if (this.peer1 && this.connected) {
+                const currentText = clipboard.readText();
+                console.log('[CONNECT] 📋 Clipboard text changed');
+                this.peer1.send('clipboard-' + currentText);
+            }
+        })
+        .on('image-changed', () => {
+            const currentImage = clipboard.readImage();
+            console.log('[CONNECT] 📋 Clipboard image changed');
+        });
+        
+    this.clipboardWatcher.startWatching();
+}
 
     setId(id) {
         if (id.length == 9) {
@@ -98,11 +113,28 @@ export class ConnectService {
     }
 
    async videoConnector() {
-    this.loading.dismiss();
-    
-    // Get SCREEN SHARE stream first (this is what the remote user will control)
-    const source = this.videoSource;
-    this.screenStream = source.stream;
+        this.loading.dismiss();
+        
+        // ⭐ CRITICAL: Destroy old peer if exists
+        if (this.peer1) {
+            console.log('[CONNECT] 🧹 Destroying old peer before creating new one...');
+            try {
+                this.peer1.destroy();
+                this.peer1 = null;
+            } catch (err) {
+                console.error('[CONNECT] Old peer destroy error:', err);
+            }
+            // Wait a bit for cleanup
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        
+        // Get SCREEN SHARE stream
+        const source = this.videoSource;
+        this.screenStream = source.stream;
+        
+
+      
+        console.log('[CONNECT] ✅ SimplePeer instance created with screen stream');
     
     console.log('[CONNECT] 🖥️ Creating peer with SCREEN SHARE stream');
 
@@ -357,169 +389,320 @@ export class ConnectService {
         this.idArray = ('' + this.id).split('');
     }
 
-    async init() {
-        if (this.initialized) {
-            return;
-        }
-        
-        this.initialized = true;
-        await this.generateId();
-        console.log('[CONNECT] 🎯 Generated ID:', this.id);
-        console.log('[CONNECT] Initializing socket service...');
-
-        // Test keyboard (no dynamic import needed)
-        if (this.electronService.isElectron) {
-            console.log('[CONNECT] Testing keyboard...');
-            try {
-                await keyboard.type('');
-                console.log('[CONNECT] ✅ Keyboard working!');
-            } catch (err) {
-                console.error('[CONNECT] ❌ Keyboard test failed:', err);
-            }
-        }
-
-        this.loading = await this.loadingCtrl.create({
-            duration: 15000,
-        });
-
-        // Listen for display changes
-        this.electronService.remote.screen.addListener(
-            'display-metrics-changed',
-            () => {
-                this.sendScreenSize();
-            }
-        );
-
-        this.spf = new SimplePeerFiles();
-
-        this.socketService.init();
-        this.socketService.joinRoom(this.id);
-
-        this.sub3 = this.socketService.onDisconnected().subscribe(async () => {
-            console.log('[DISCONNECT] Remote peer disconnected');
-            const alert = await this.alertCtrl.create({
-                header: 'Info',
-                message: 'Connection was terminated',
-                buttons: ['OK'],
-            });
-            await alert.present();
-
-            this.reconnect();
-        });
-
-        this.socketSub = this.socketService
-            .onNewMessage()
-            .subscribe(async (data: any) => {
-                console.log('[CONNECT] 📨 Socket message received:', typeof data === 'string' ? data : 'signal');
-                
-                if (typeof data == 'string' && data == 'hi') {
-                    if (this.dialog) return; 
-                    this.dialog = true;
-                    console.log('[CONNECT] 👋 Received connection request');
-                    this.sendScreenSize();
-
-                    if (this.settingsService.settings?.hiddenAccess) {
-                        this.socketService.sendMessage('pwRequest');
-                        return;
-                    } else {
-                        const win = this.electronService.window;
-                        win.show();
-                        win.focus();
-                        win.restore();
-
-                        const result = await this.askForConnectPermission();
-                        this.dialog = false;
-
-                        if (!result) {
-                            this.socketService.sendMessage('decline');
-                            this.loading.dismiss();
-                            return;
-                        }
-                        await this.videoConnector();
-                    }
-                } else if (
-                    typeof data == 'string' &&
-                    data.substring(0, 8) == 'pwAnswer'
-                ) {
-                    const pw = data.replace(data.substring(0, 9), '');
-                    const pwCorrect =
-                        await this.electronService.bcryptjs.compare(
-                            pw,
-                            this.settingsService.settings.passwordHash
-                        );
-
-                    if (pwCorrect) {
-                        await this.videoConnector();
-                    } else {
-                        this.socketService.sendMessage('pwWrong');
-                        this.loading.dismiss();
-                        
-                        const alert = await this.alertCtrl.create({
-                            header: 'Password not correct',
-                            buttons: ['OK']
-                        });
-                        await alert.present();
-                    }
-                } else if (
-                    typeof data == 'string' &&
-                    data.startsWith('decline')
-                ) {
-                    this.loading.dismiss();
-                } else {
-                    if (this.peer1) {
-                        console.log('[CONNECT] 🔄 Signaling peer');
-                        this.peer1.signal(data);
-                    } else {
-                        console.warn('[CONNECT] ⚠️ Received signal but peer not initialized yet');
-                    }
-                }
-            });
+   async init() {
+    // ⭐ CRITICAL: Allow re-initialization
+    if (this.initialized) {
+        console.log('[CONNECT] ⚠️ Already initialized, cleaning up first...');
+        await this.destroy();
+        this.initialized = false;
+        // Wait a bit before continuing
+        await new Promise(resolve => setTimeout(resolve, 500));
     }
+    
+    // ⭐ Reset dialog flag
+    this.dialog = false;
+    
+    this.initialized = true;
+    await this.generateId();
+    console.log('[CONNECT] 🎯 Generated ID:', this.id);
+
+    // Test keyboard
+    if (this.electronService.isElectron) {
+        console.log('[CONNECT] Testing keyboard...');
+        try {
+            await keyboard.type('');
+            console.log('[CONNECT] ✅ Keyboard working!');
+        } catch (err) {
+            console.error('[CONNECT] ❌ Keyboard test failed:', err);
+        }
+    }
+
+    this.loading = await this.loadingCtrl.create({
+        duration: 15000,
+    });
+
+    // Listen for display changes
+    this.electronService.remote.screen.addListener(
+        'display-metrics-changed',
+        () => {
+            this.sendScreenSize();
+        }
+    );
+
+    this.spf = new SimplePeerFiles();
+
+    // ⭐ CRITICAL: Unsubscribe old listeners FIRST
+    if (this.messageSubscription) {
+        console.log('[CONNECT] 🧹 Cleaning old message subscription');
+        this.messageSubscription.unsubscribe();
+        this.messageSubscription = null;
+    }
+    if (this.disconnectSubscription) {
+        console.log('[CONNECT] 🧹 Cleaning old disconnect subscription');
+        this.disconnectSubscription.unsubscribe();
+        this.disconnectSubscription = null;
+    }
+    if (this.socketSub) {
+        console.log('[CONNECT] 🧹 Cleaning old socket subscription');
+        this.socketSub.unsubscribe();
+        this.socketSub = null;
+    }
+    if (this.sub3) {
+        console.log('[CONNECT] 🧹 Cleaning sub3');
+        this.sub3.unsubscribe();
+        this.sub3 = null;
+    }
+
+    // ⭐ CRITICAL: Properly initialize socket
+    this.socketService.init();
+    
+   // ⭐ CRITICAL: Properly initialize socket
+if (this.socketService.socket?.connected) {
+    console.log('[CONNECT] 🔌 Socket already connected, disconnecting first...');
+    this.socketService.socket.disconnect();
+    await new Promise(resolve => setTimeout(resolve, 300));
+}
+
+this.socketService.init();
+
+// Wait for socket to be ready with timeout
+await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+        reject(new Error('Socket connection timeout'));
+    }, 5000);
+    
+    if (this.socketService.socket?.connected) {
+        clearTimeout(timeout);
+        resolve(true);
+    } else {
+        this.socketService.socket.once('connect', () => {
+            clearTimeout(timeout);
+            resolve(true);
+        });
+    }
+}).catch(err => {
+    console.error('[CONNECT] ❌ Socket connection failed:', err);
+});
+    
+    console.log('[CONNECT] 🔌 Socket ready, joining room:', this.id);
+    this.socketService.joinRoom(this.id);
+
+    // ⭐ Create fresh disconnect subscription
+    this.disconnectSubscription = this.socketService.onDisconnected().subscribe(async () => {
+        console.log('[DISCONNECT] Remote peer disconnected');
+        const alert = await this.alertCtrl.create({
+            header: 'Info',
+            message: 'Connection was terminated',
+            buttons: ['OK'],
+        });
+        await alert.present();
+
+        this.reconnect();
+    });
+
+    // ⭐ Create fresh message subscription
+    this.messageSubscription = this.socketService
+        .onNewMessage()
+        .subscribe(async (data: any) => {
+            console.log('[CONNECT] 📨 Socket message received');
+            
+            if (typeof data == 'string' && data == 'hi') {
+                if (this.dialog) {
+                    console.log('[CONNECT] ⚠️ Dialog already open, ignoring...');
+                    return; 
+                }
+                this.dialog = true;
+                console.log('[CONNECT] 👋 Received connection request');
+                this.sendScreenSize();
+
+                if (this.settingsService.settings?.hiddenAccess) {
+                    this.socketService.sendMessage('pwRequest');
+                    return;
+                } else {
+                    const win = this.electronService.window;
+                    win.show();
+                    win.focus();
+                    win.restore();
+
+                    const result = await this.askForConnectPermission();
+                    this.dialog = false;
+
+                    if (!result) {
+                        this.socketService.sendMessage('decline');
+                        this.loading.dismiss();
+                        return;
+                    }
+                    await this.videoConnector();
+                }
+            } else if (typeof data == 'string' && data.substring(0, 8) == 'pwAnswer') {
+                const pw = data.replace(data.substring(0, 9), '');
+                const pwCorrect = await this.electronService.bcryptjs.compare(
+                    pw,
+                    this.settingsService.settings.passwordHash
+                );
+
+                if (pwCorrect) {
+                    await this.videoConnector();
+                } else {
+                    this.socketService.sendMessage('pwWrong');
+                    this.loading.dismiss();
+                    
+                    const alert = await this.alertCtrl.create({
+                        header: 'Password not correct',
+                        buttons: ['OK']
+                    });
+                    await alert.present();
+                    this.dialog = false; // ⭐ Reset dialog flag
+                }
+            } else if (typeof data == 'string' && data.startsWith('decline')) {
+                this.loading.dismiss();
+                this.dialog = false; // ⭐ Reset dialog flag
+            } else {
+                if (this.peer1) {
+                    console.log('[CONNECT] 🔄 Signaling peer');
+                    this.peer1.signal(data);
+                } else {
+                    console.warn('[CONNECT] ⚠️ Received signal but peer not initialized yet');
+                }
+            }
+        });
+    
+    // ⭐ Store reference
+    this.socketSub = this.messageSubscription;
+}
+
 
     replaceVideo(stream) {
         this.peer1.removeStream(this.screenStream);
         this.screenStream = stream;
         this.peer1.addStream(stream);
     }
-
-    async reconnect() {
-        const win = this.electronService.window;
-        win.restore();
-        this.connected = false;
-        
-        // Stop camera stream
-        if (this.cameraStream) {
-            this.cameraStream.getTracks().forEach(track => track.stop());
-            this.cameraStream = null;
-        }
-        
-        // Stop screen stream
-        if (this.screenStream) {
-            this.screenStream.getTracks().forEach(track => track.stop());
-            this.screenStream = null;
-        }
-        
-        // Remove video elements
-        const localVideo = document.getElementById('localUserVideo');
-        const remoteVideo = document.getElementById('remoteUserVideo');
-        if (localVideo) localVideo.remove();
-        if (remoteVideo) remoteVideo.remove();
-        
-        await this.destroy();
-        setTimeout(() => {
-            this.init();
-        }, 500);
-        this.connectHelperService.closeInfoWindow();
+ async reconnect() {
+    console.log('[CONNECT] 🔄 Reconnecting...');
+    const win = this.electronService.window;
+    win.restore();
+    this.connected = false;
+    this.dialog = false; // ⭐ Reset dialog flag
+    
+    // Stop camera stream
+    if (this.cameraStream) {
+        this.cameraStream.getTracks().forEach(track => {
+            track.stop();
+            console.log('[CONNECT] Stopped camera track:', track.kind);
+        });
+        this.cameraStream = null;
     }
+    
+    // Stop screen stream
+    if (this.screenStream) {
+        this.screenStream.getTracks().forEach(track => {
+            track.stop();
+            console.log('[CONNECT] Stopped screen track:', track.kind);
+        });
+        this.screenStream = null;
+    }
+    
+    // Remove video elements
+    const localVideo = document.getElementById('localUserVideo');
+    const remoteVideo = document.getElementById('remoteUserVideo');
+    if (localVideo) localVideo.remove();
+    if (remoteVideo) remoteVideo.remove();
+    
+    // ⭐ CRITICAL: Properly destroy everything
+    await this.destroy();
+    
+    // ⭐ CRITICAL: Reset initialized flag to allow re-init
+    this.initialized = false;
+    
+    // Wait before re-initializing
+    setTimeout(async () => {
+        console.log('[CONNECT] ✅ Re-initializing...');
+        
+        // ⭐ Ensure socket is completely disconnected first
+        if (this.socketService?.socket?.connected) {
+            console.log('[CONNECT] 🔌 Disconnecting socket before re-init...');
+            this.socketService.socket.disconnect();
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        await this.init();
+    }, 1500); // Increased delay
+    
+    this.connectHelperService.closeInfoWindow();
+}
 
-    async destroy() {
-        this.initialized = false;
-        await this.peer1?.destroy();
+
+   async destroy() {
+    console.log('[CONNECT] 🧹 Destroying connection...');
+    
+    // ⭐ Reset dialog flag
+    this.dialog = false;
+
+    if (this.clipboardWatcher) {
+        console.log('[CONNECT] 🛑 Stopping clipboard watcher');
+        try {
+            this.clipboardWatcher.stopWatching();
+            this.clipboardWatcher = null;
+        } catch (err) {
+            console.error('[CONNECT] Clipboard cleanup error:', err);
+        }
+    }
+   if (this.id) {
+    console.log('[CONNECT] 🚪 Leaving room:', this.id);
+    try {
+        this.socketService.leaveRoom(this.id);
+        await new Promise(resolve => setTimeout(resolve, 200));
+    } catch (err) {
+        console.error('[CONNECT] Leave room error:', err);
+    }
+}
+    
+    // ⭐ CRITICAL: Destroy peer properly
+    if (this.peer1) {
+        try {
+            this.peer1.destroy();
+            this.peer1 = null; // ⭐ Set to null!
+        } catch (err) {
+            console.error('[CONNECT] Peer destroy error:', err);
+        }
+    }
+    
+    // ⭐ CRITICAL: Unsubscribe from all socket listeners
+    try {
+        if (this.socketSub) {
+            this.socketSub.unsubscribe();
+            this.socketSub = null;
+        }
+        if (this.sub3) {
+            this.sub3.unsubscribe();
+            this.sub3 = null;
+        }
+        if (this.messageSubscription) {
+            this.messageSubscription.unsubscribe();
+            this.messageSubscription = null;
+        }
+        if (this.disconnectSubscription) {
+            this.disconnectSubscription.unsubscribe();
+            this.disconnectSubscription = null;
+        }
+    } catch (err) {
+        console.error('[CONNECT] Subscription cleanup error:', err);
+    }
+    
+    // Destroy socket
+    try {
         await this.socketService?.destroy();
-        await this.socketSub?.unsubscribe();
-        await this.sub3?.unsubscribe();
-        await this.electronService.remote.screen.removeAllListeners();
+    } catch (err) {
+        console.error('[CONNECT] Socket destroy error:', err);
     }
+    
+    // Remove screen listeners
+    try {
+        await this.electronService.remote.screen.removeAllListeners();
+    } catch (err) {
+        console.error('[CONNECT] Screen listener cleanup error:', err);
+    }
+}
 
     connect(id) {
         if (this.electronService.isElectronApp) {
