@@ -1023,6 +1023,7 @@ export class ConnectService {
     }
 
     // ========================= CHAT FUNCTIONS =============================
+    
     // Creates both Host and User chat panes on screen (left = Host, right = User)
     createDualChatUI() {
         // create host pane (left)

@@ -1,8 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ElectronService } from './electron.service';
 import { AppConfig } from '../../../environments/environment';
-
-// Import nut-js directly
 import { keyboard, Key, mouse, Button } from '@nut-tree-fork/nut-js';
 
 declare var window: any;
@@ -14,6 +12,11 @@ export class ConnectHelperService {
   infoWindow: any;
 
   constructor(private electronService: ElectronService) {}
+
+  // Generate a 3-digit random number
+  threeDigit(): number {
+    return Math.floor(Math.random() * 900) + 100; // 100-999
+  }
 
   // Scroll handler
   handleScroll(text: string) {
@@ -52,14 +55,7 @@ export class ConnectHelperService {
     }
   }
 
-  threeDigit() {
-    return Math.floor(Math.random() * (999 - 100 + 1) + 100);
-  }
-
   // Keyboard handler
-  /**
-   * data: { key: string; shift?: boolean; control?: boolean; alt?: boolean; meta?: boolean; code?: string }
-   */
   async handleKey(data: { key?: string; shift?: boolean; control?: boolean; alt?: boolean; meta?: boolean; code?: string }) {
     try {
       if (!this.electronService.isElectron) {
@@ -67,21 +63,19 @@ export class ConnectHelperService {
         return;
       }
 
-      // Determine platform safely (electron process or navigator)
       const rawPlatform = (window as any)?.process?.platform ?? (navigator?.platform ?? '').toString();
       const platformStr = String(rawPlatform).toLowerCase();
       const isMac = platformStr.includes('darwin') || platformStr.includes('mac');
 
       const modifiers: Key[] = [];
       if (data.shift) modifiers.push(Key.LeftShift);
-      if (data.control) modifiers.push(isMac ? Key.LeftControl : Key.LeftControl); // control mapped to LeftControl (on mac control exists too)
+      if (data.control) modifiers.push(Key.LeftControl);
       if (data.alt) modifiers.push(Key.LeftAlt);
       if (data.meta) modifiers.push(Key.LeftSuper);
 
-      // Helper to get a reversed copy without mutating original
       const reversedModifiers = [...modifiers].reverse();
 
-      // If single printable character -> type it (with modifiers pressed)
+      // Printable characters
       if (data.key && data.key.length === 1) {
         if (modifiers.length > 0) {
           for (const m of modifiers) await keyboard.pressKey(m);
@@ -93,19 +87,13 @@ export class ConnectHelperService {
         return;
       }
 
-      // For special keys, try to map using code or key if possible
+      // Special keys
       const keyName = data.code || data.key || '';
       let keyToPress: Key | null = null;
 
-      // Try multiple strategies to look up enum value
       try {
-        // direct lookup (if code matches enum member name)
-        keyToPress = (Key as any)[keyName] ?? null;
-        if (!keyToPress && data.key) {
-          // try with the human-readable key name as fallback
-          keyToPress = (Key as any)[data.key] ?? null;
-        }
-      } catch (e) {
+        keyToPress = (Key as any)[keyName] ?? (data.key ? (Key as any)[data.key] : null);
+      } catch {
         keyToPress = null;
       }
 
@@ -119,19 +107,16 @@ export class ConnectHelperService {
           await keyboard.pressKey(keyToPress);
           await keyboard.releaseKey(keyToPress);
         }
-      } else {
-        // if we couldn't map to a Key, fall back to typing the key string (if present)
-        if (data.key) {
-          if (modifiers.length > 0) {
-            for (const m of modifiers) await keyboard.pressKey(m);
-            await keyboard.type(data.key);
-            for (const m of reversedModifiers) await keyboard.releaseKey(m);
-          } else {
-            await keyboard.type(data.key);
-          }
+      } else if (data.key) {
+        if (modifiers.length > 0) {
+          for (const m of modifiers) await keyboard.pressKey(m);
+          await keyboard.type(data.key);
+          for (const m of reversedModifiers) await keyboard.releaseKey(m);
         } else {
-          console.warn('Unknown key to press and no fallback text:', data);
+          await keyboard.type(data.key);
         }
+      } else {
+        console.warn('Unknown key to press and no fallback text:', data);
       }
     } catch (error) {
       console.error('handleKey error:', error);
