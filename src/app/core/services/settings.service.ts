@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { get, set } from './storage.service';
+import { encrypt, decrypt } from './storage.service';
 
 @Injectable({
     providedIn: 'root',
@@ -18,9 +19,13 @@ export class SettingsService {
 
     constructor() {}
 
+    // -----------------------------------------
+    // LOAD SETTINGS
+    // -----------------------------------------
     async load() {
         console.log('[SETTINGS] Loading settings...');
         const settings: any = await get('settings');
+
         if (settings) {
             Object.assign(this.settings, settings);
             console.log('[SETTINGS] Loaded:', this.settings);
@@ -29,6 +34,9 @@ export class SettingsService {
         }
     }
 
+    // -----------------------------------------
+    // SAVE GENERAL SETTINGS
+    // -----------------------------------------
     async saveSettings(settings) {
         console.log('[SETTINGS] Saving settings:', settings);
         Object.assign(this.settings, settings);
