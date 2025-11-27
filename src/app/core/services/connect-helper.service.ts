@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import { ElectronService } from './electron.service';
 import { AppConfig } from '../../../environments/environment';
+
+// Import nut-js directly
 import { keyboard, Key, mouse, Button } from '@nut-tree-fork/nut-js';
 
 declare var window: any;
@@ -12,50 +14,6 @@ export class ConnectHelperService {
   infoWindow: any;
 
   constructor(private electronService: ElectronService) {}
-
-  // ⭐ ALL SPECIAL KEYS MAPPED FOR REMOTE CONTROL
-  private specialKeysMap: Record<string, Key> = {
-    Escape: Key.Escape,
-    Tab: Key.Tab,
-    CapsLock: Key.CapsLock,
-
-    ShiftLeft: Key.LeftShift,
-    ShiftRight: Key.RightShift,
-
-    ControlLeft: Key.LeftControl,
-    ControlRight: Key.RightControl,
-
-    AltLeft: Key.LeftAlt,
-    AltRight: Key.RightAlt,
-
-    MetaLeft: Key.LeftSuper,
-    MetaRight: Key.RightSuper,
-
-    Enter: Key.Enter,
-    Backspace: Key.Backspace,
-    Space: Key.Space,
-
-    ArrowUp: Key.Up,
-    ArrowDown: Key.Down,
-    ArrowLeft: Key.Left,
-    ArrowRight: Key.Right,
-
-    Delete: Key.Delete,
-    Insert: Key.Insert,
-    Home: Key.Home,
-    End: Key.End,
-    PageUp: Key.PageUp,
-    PageDown: Key.PageDown,
-
-    F1: Key.F1, F2: Key.F2, F3: Key.F3, F4: Key.F4,
-    F5: Key.F5, F6: Key.F6, F7: Key.F7, F8: Key.F8,
-    F9: Key.F9, F10: Key.F10, F11: Key.F11, F12: Key.F12,
-  };
-
-  // Generate a 3-digit random number
-  threeDigit(): number {
-    return Math.floor(Math.random() * 900) + 100; // 100-999
-  }
 
   // Scroll handler
   handleScroll(text: string) {
@@ -94,57 +52,93 @@ export class ConnectHelperService {
     }
   }
 
-  // ⭐ FIXED KEYBOARD HANDLER (FULLY WORKING)
-  async handleKey(data: {
-    key?: string;
-    shift?: boolean;
-    control?: boolean;
-    alt?: boolean;
-    meta?: boolean;
-    code?: string;
-  }) {
+  threeDigit() {
+    return Math.floor(Math.random() * (999 - 100 + 1) + 100);
+  }
+
+  // Keyboard handler
+  /**
+   * data: { key: string; shift?: boolean; control?: boolean; alt?: boolean; meta?: boolean; code?: string }
+   */
+  async handleKey(data: { key?: string; shift?: boolean; control?: boolean; alt?: boolean; meta?: boolean; code?: string }) {
     try {
-      if (!this.electronService.isElectron) return;
+      if (!this.electronService.isElectron) {
+        console.log('Not running in electron - keyboard input ignored.', data);
+        return;
+      }
+
+      // Determine platform safely (electron process or navigator)
+      const rawPlatform = (window as any)?.process?.platform ?? (navigator?.platform ?? '').toString();
+      const platformStr = String(rawPlatform).toLowerCase();
+      const isMac = platformStr.includes('darwin') || platformStr.includes('mac');
 
       const modifiers: Key[] = [];
       if (data.shift) modifiers.push(Key.LeftShift);
-      if (data.control) modifiers.push(Key.LeftControl);
+      if (data.control) modifiers.push(isMac ? Key.LeftControl : Key.LeftControl); // control mapped to LeftControl (on mac control exists too)
       if (data.alt) modifiers.push(Key.LeftAlt);
       if (data.meta) modifiers.push(Key.LeftSuper);
 
+      // Helper to get a reversed copy without mutating original
       const reversedModifiers = [...modifiers].reverse();
 
-      const keyCode = data.code || data.key || '';
-      const nutKey =
-        this.specialKeysMap[keyCode] ??
-        this.specialKeysMap[data.key ?? ''] ??
-        null;
-
-      // 🔹 Printable characters (a-z, 0-9, symbols)
+      // If single printable character -> type it (with modifiers pressed)
       if (data.key && data.key.length === 1) {
-        for (const m of modifiers) await keyboard.pressKey(m);
-        await keyboard.type(data.key);
-        for (const m of reversedModifiers) await keyboard.releaseKey(m);
+        if (modifiers.length > 0) {
+          for (const m of modifiers) await keyboard.pressKey(m);
+          await keyboard.type(data.key);
+          for (const m of reversedModifiers) await keyboard.releaseKey(m);
+        } else {
+          await keyboard.type(data.key);
+        }
         return;
       }
 
-      // 🔹 Special keys mapped above
-      if (nutKey) {
-        for (const m of modifiers) await keyboard.pressKey(m);
-        await keyboard.pressKey(nutKey);
-        await keyboard.releaseKey(nutKey);
-        for (const m of reversedModifiers) await keyboard.releaseKey(m);
-        return;
+      // For special keys, try to map using code or key if possible
+      const keyName = data.code || data.key || '';
+      let keyToPress: Key | null = null;
+
+      // Try multiple strategies to look up enum value
+      try {
+        // direct lookup (if code matches enum member name)
+        keyToPress = (Key as any)[keyName] ?? null;
+        if (!keyToPress && data.key) {
+          // try with the human-readable key name as fallback
+          keyToPress = (Key as any)[data.key] ?? null;
+        }
+      } catch (e) {
+        keyToPress = null;
       }
 
-      console.warn('Unknown key:', data);
-
+      if (keyToPress) {
+        if (modifiers.length > 0) {
+          for (const m of modifiers) await keyboard.pressKey(m);
+          await keyboard.pressKey(keyToPress);
+          await keyboard.releaseKey(keyToPress);
+          for (const m of reversedModifiers) await keyboard.releaseKey(m);
+        } else {
+          await keyboard.pressKey(keyToPress);
+          await keyboard.releaseKey(keyToPress);
+        }
+      } else {
+        // if we couldn't map to a Key, fall back to typing the key string (if present)
+        if (data.key) {
+          if (modifiers.length > 0) {
+            for (const m of modifiers) await keyboard.pressKey(m);
+            await keyboard.type(data.key);
+            for (const m of reversedModifiers) await keyboard.releaseKey(m);
+          } else {
+            await keyboard.type(data.key);
+          }
+        } else {
+          console.warn('Unknown key to press and no fallback text:', data);
+        }
+      }
     } catch (error) {
       console.error('handleKey error:', error);
     }
   }
 
-  // =================== INFO WINDOW CODE ======================
+  // Info window
   closeInfoWindow() {
     try {
       this.infoWindow?.close();
